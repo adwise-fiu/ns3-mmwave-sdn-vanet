@@ -1,9 +1,9 @@
-# Integration of SDN with wireless interfaces including Cellular mmWave for simulations in ns-3 v3.29
+# Integration of SDN with Wireless Interfaces Including Cellular mmWave for Simulations in ns-3 v3.29
 
 This code integrates modules from two repositories along with other improvements to expand the functionality to wireless interfaces.
 This work aims to serve as a framework for simulation of scenarios integrating SDN on vehicular adhoc networks (VANET).
 
-## Clonage instructions
+## Clonage Instructions
 
 This repository uses library *ofsoftswitch13* as a submodule. Therefore, to clone the repository, use:
 
@@ -23,7 +23,7 @@ make
 
 Once  everything  gets  compiled,   the  static  library `libns3ofswitch13.a` file  will  be  available  under  the `ofswitch13/lib/ofsoftswitch13/udatapath` directory
 
-## mmWave ns-3 module v2.0
+## mmWave ns-3 Module v2.0
 
 This is based on the mmWave [version 2.0](https://github.com/nyuwireless-unipd/ns3-mmwave/releases/tag/V2.0 "mmWave 2.0 github repository") module for the simulation of G mmWave cellular networks. A description of this module can be found on [IEEExplore (open access)](https://ieeexplore.ieee.org/document/8344116/ "mmwave paper").
 
@@ -37,12 +37,16 @@ This module builds on top of the LTE one, and version 2.0 includes features such
 - Dual Connectivity with LTE base stations, with fast secondary cell handover and channel tracking
 - Simulation of core network elements (with also the MME as a real node)
 
-## OpenFlow ns-3 module v1.3
+## OpenFlow ns-3 Module v1.3
 
 This is the OFSwitch13 module, which enhances the [ns-3 Network Simulator][ns-3] with [OpenFlow 1.3][ofp13] capabilities, allowing ns-3 users to simulate Software-Defined Networks (SDN). 
 This module implements the interface for interconnecting the ns-3 simulator to the [OpenFlow 1.3 Software Switch for ns-3][ofs13] (ofsoftswitch13) library. It is the library that, in fact, provides the switch implementation, the library for converting to/from OpenFlow 1.3 wire format, and the dpctl tool for configuring the switch from the console.
 
 Please, visit the [OFSwitch13 project homepage][project] for detailed information on the module design, documentation, and *how to get started* tutorials. The code API documentation for the latest release of this project is available [here][apidoc].
+
+## Ns-2 Mobility Helper with 3D Mobility
+
+The  *Ns2MobilityHelper* was expanded to allow 3D mobility traces from this [repository][ns2mobility].
 
 ## License ##
 
@@ -176,3 +180,4 @@ a copy of the development version with the following command:
 [project]: http://www.lrc.ic.unicamp.br/ofswitch13/
 [apidoc]: http://www.lrc.ic.unicamp.br/ofswitch13/doc/html/index.html
 [gpl]: http://www.gnu.org/copyleft/gpl.html
+[ns2mobility]: https://github.com/ogbautista/Ns2MobilityHelper

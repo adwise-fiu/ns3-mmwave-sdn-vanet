@@ -19,6 +19,7 @@
  * Author: Mathieu Lacage <mathieu.lacage@sophia.inria.fr>
  * Contributors: Thomas Waldecker <twaldecker@rocketmail.com>
  *               Martín Giachino <martin.giachino@gmail.com>
+ *               Oscar Bautista <obaut004@fiu.edu> (Adapted for 3D movements & bug fix)
  *
  * Brief description: Implementation of a ns2 movement trace file reader.
  *
@@ -31,6 +32,7 @@
  * $node set Y_ y1
  * $node set Z_ z1
  * $ns at $time $node setdest x2 y2 speed
+ * $ns at $time $node setdest x2 y2 z2 speed
  * $ns at $time $node set X_ x1
  * $ns at $time $node set Y_ Y1
  * $ns at $time $node set Z_ Z1
@@ -106,7 +108,7 @@ struct DestinationPoint
  */
 static ParseResult ParseNs2Line (const std::string& str);
 
-/** 
+/**
  * Put out blank spaces at the start and end of a line
  */
 static std::string TrimNs2Line (const std::string& str);
@@ -127,20 +129,20 @@ static bool IsVal (const std::string& str, T& ret);
 
 /**
  * Checks if the value between brackets is a correct nodeId number
- */ 
+ */
 static bool HasNodeIdNumber (std::string str);
 
-/** 
+/**
  * Gets nodeId number in string format from the string like $node_(4)
  */
 static std::string GetNodeIdFromToken (std::string str);
 
-/** 
+/**
  * Get node id number in int format
  */
 static int GetNodeIdInt (ParseResult pr);
 
-/**  
+/**
  * Get node id number in string format
  */
 static std::string GetNodeIdString (ParseResult pr);
@@ -150,12 +152,12 @@ static std::string GetNodeIdString (ParseResult pr);
  */
 static Vector SetOneInitialCoord (Vector actPos, std::string& coord, double value);
 
-/** 
+/**
  * Check if this corresponds to a line like this: $node_(0) set X_ 123
  */
 static bool IsSetInitialPos (ParseResult pr);
 
-/** 
+/**
  * Check if this corresponds to a line like this: $ns_ at 1 "$node_(0) setdest 2 3 4"
  */
 static bool IsSchedSetPos (ParseResult pr);
@@ -169,24 +171,24 @@ static bool IsSchedMobilityPos (ParseResult pr);
  * Set waypoints and speed for movement.
  */
 static DestinationPoint SetMovement (Ptr<ConstantVelocityMobilityModel> model, Vector lastPos, double at,
-                                     double xFinalPosition, double yFinalPosition, double speed);
+                                     Vector finalPosition, double speed);
 
 /**
  * Set initial position for a node
  */
 static Vector SetInitialPosition (Ptr<ConstantVelocityMobilityModel> model, std::string coord, double coordVal);
 
-/** 
+/**
  * Schedule a set of position for a node
  */
-static Vector SetSchedPosition (Ptr<ConstantVelocityMobilityModel> model, double at, std::string coord, double coordVal);
+static Vector SetSchedPosition (Ptr<ConstantVelocityMobilityModel> model, Vector last_pos, double at, std::string coord, double coordVal);
 
 
 Ns2MobilityHelper::Ns2MobilityHelper (std::string filename)
   : m_filename (filename)
 {
   std::ifstream file (m_filename.c_str (), std::ios::in);
-  if (!(file.is_open ())) NS_FATAL_ERROR("Could not open trace file " << m_filename.c_str() << " for reading, aborting here \n"); 
+  if (!(file.is_open ())) NS_FATAL_ERROR("Could not open trace file " << m_filename.c_str() << " for reading, aborting here \n");
 }
 
 Ptr<ConstantVelocityMobilityModel>
@@ -281,8 +283,8 @@ Ns2MobilityHelper::ConfigNodesMovements (const ObjectStore &store) const
               last_pos[iNodeId] = point;
 
               // Log new position
-              NS_LOG_DEBUG ("Positions after parse for node " << iNodeId << " " << nodeId <<
-                            " position = " << last_pos[iNodeId].m_finalPosition);
+              NS_LOG_DEBUG ("Positions after initial position parse for node " << iNodeId << " " << nodeId <<
+                            " position= " << last_pos[iNodeId].m_finalPosition);
             }
         }
       file.close ();
@@ -313,8 +315,8 @@ Ns2MobilityHelper::ConfigNodesMovements (const ObjectStore &store) const
 
           ParseResult pr = ParseNs2Line (line); // Parse line and obtain tokens
 
-          // Check if the line corresponds with one of the three types of line
-          if (pr.tokens.size () != 4 && pr.tokens.size () != 7 && pr.tokens.size () != 8)
+          // Check if the line corresponds with one of the four types of lines
+          if (pr.tokens.size () != 4 && pr.tokens.size () != 7 && pr.tokens.size () != 8 && pr.tokens.size () != 9)
             {
               NS_LOG_ERROR ("Line has not correct number of parameters (corrupted file?): " << line << "\n");
               continue;
@@ -373,10 +375,10 @@ Ns2MobilityHelper::ConfigNodesMovements (const ObjectStore &store) const
                 }
 
 
-
               /*
                * In this case a new waypoint is added
-               * line like $ns_ at 1 "$node_(0) setdest 2 3 4"
+               * line like $ns_ at 1 "$node_(0) setdest 2 3 4" for 2D destination, or
+               * line like $ns_ at 2 "$node_(0) setdest 2 3 4 5" for 3D destination
                */
               if (IsSchedMobilityPos (pr))
                 {
@@ -387,17 +389,31 @@ Ns2MobilityHelper::ConfigNodesMovements (const ObjectStore &store) const
                       Vector reached = Vector (
                           last_pos[iNodeId].m_startPosition.x + last_pos[iNodeId].m_speed.x * actuallytraveled,
                           last_pos[iNodeId].m_startPosition.y + last_pos[iNodeId].m_speed.y * actuallytraveled,
-                          0
+                          last_pos[iNodeId].m_startPosition.z + last_pos[iNodeId].m_speed.z * actuallytraveled
                           );
                       NS_LOG_LOGIC ("Final point = " << last_pos[iNodeId].m_finalPosition << ", actually reached = " << reached);
                       last_pos[iNodeId].m_stopEvent.Cancel ();
                       last_pos[iNodeId].m_finalPosition = reached;
                     }
-                  //                                     last position     time  X coord     Y coord      velocity
-                  last_pos[iNodeId] = SetMovement (model, last_pos[iNodeId].m_finalPosition, at, pr.dvals[5], pr.dvals[6], pr.dvals[7]);
+                  Vector finalPosition;
+                  double speed;
+                  finalPosition.x =  pr.dvals[5];
+                  finalPosition.y = pr.dvals[6];
+                  if (pr.tokens.size () == 9) //Destination is a 3D coordinate
+                  {
+                    finalPosition.z = pr.dvals[7];
+                    speed = pr.dvals[8];
+                  }
+                  else                        //The default 2D coordinate case
+                  {
+                    finalPosition.z = 0;
+                    speed = pr.dvals[7];
+                  }
+                  //                                                        last position   time coord vector  velocity
+                  last_pos[iNodeId] = SetMovement (model, last_pos[iNodeId].m_finalPosition, at, finalPosition, speed);
 
                   // Log new position
-                  NS_LOG_DEBUG ("Positions after parse for node " << iNodeId << " " << nodeId << " position =" << last_pos[iNodeId].m_finalPosition);
+                  NS_LOG_DEBUG ("Positions after scheduled movement parse for node " << iNodeId << " " << nodeId << " position= " << last_pos[iNodeId].m_finalPosition);
                 }
 
 
@@ -407,8 +423,8 @@ Ns2MobilityHelper::ConfigNodesMovements (const ObjectStore &store) const
                */
               else if (IsSchedSetPos (pr))
                 {
-                  //                                         time  coordinate   coord value
-                  last_pos[iNodeId].m_finalPosition = SetSchedPosition (model, at, pr.tokens[5], pr.dvals[6]);
+                  //                                                                        last position vector time  coordinate   coord value
+                  last_pos[iNodeId].m_finalPosition = SetSchedPosition (model, last_pos[iNodeId].m_finalPosition, at, pr.tokens[5], pr.dvals[6]);
                   if (last_pos[iNodeId].m_targetArrivalTime > at)
                     {
                       last_pos[iNodeId].m_stopEvent.Cancel ();
@@ -416,8 +432,8 @@ Ns2MobilityHelper::ConfigNodesMovements (const ObjectStore &store) const
                   last_pos[iNodeId].m_targetArrivalTime = at;
                   last_pos[iNodeId].m_travelStartTime = at;
                   // Log new position
-                  NS_LOG_DEBUG ("Positions after parse for node " << iNodeId << " " << nodeId <<
-                                " position =" << last_pos[iNodeId].m_finalPosition);
+                  NS_LOG_DEBUG ("Position after scheduled position parse for node " << iNodeId << " " << nodeId <<
+                                " position= " << last_pos[iNodeId].m_finalPosition);
                 }
               else
                 {
@@ -486,7 +502,7 @@ ParseNs2Line (const std::string& str)
 
   // if it is a scheduled set _[XYZ] or a setdest I need to remove the last "
   // and re-calculate values
-  if ( (tokensLength == 7 || tokensLength == 8)
+  if ( (tokensLength == 7 || tokensLength == 8 || tokensLength == 9)
        && (ret.tokens[tokensLength - 1][lasTokenLength - 1] == '"') )
     {
 
@@ -511,7 +527,8 @@ ParseNs2Line (const std::string& str)
       ret.svals[tokensLength - 1] = x;
 
     }
-  else if ( (tokensLength == 9 && ret.tokens[tokensLength - 1] == "\"")
+  else if ( (tokensLength == 10 && ret.tokens[tokensLength - 1] == "\"")
+            || (tokensLength == 9 && ret.tokens[tokensLength - 1] == "\"")
             || (tokensLength == 8 && ret.tokens[tokensLength - 1] == "\""))
     {
       // if the line has the " character in this way: $ns_ at 1 "$node_(0) setdest 2 2 1  "
@@ -525,7 +542,6 @@ ParseNs2Line (const std::string& str)
       ret.svals.erase (ret.svals.begin () + tokensLength - 1);
 
     }
-
 
 
   return ret;
@@ -646,6 +662,9 @@ GetNodeIdInt (ParseResult pr)
     case 8:   // line like $ns_ at 1 "$node_(0) setdest 2 3 4"
       result = pr.ivals[3];
       break;
+    case 9:   // line like $ns_ at 2 "$node_(0) setdest 2 3 4 5"
+      result = pr.ivals[3];
+      break;
     default:
       result = -1;
     }
@@ -665,6 +684,9 @@ GetNodeIdString (ParseResult pr)
       return pr.svals[3];
       break;
     case 8:   // line like $ns_ at 1 "$node_(0) setdest 2 3 4"
+      return pr.svals[3];
+      break;
+    case 9:   // line like $ns_ at 2 "$node_(0) setdest 2 3 4 5"
       return pr.svals[3];
       break;
     default:
@@ -713,17 +735,18 @@ IsSchedSetPos (ParseResult pr)
 {
   //      correct number of tokens,    has $ns_                   and at
   return pr.tokens.size () == 7 && pr.tokens[0] == NS2_NS_SCH && pr.tokens[1] == NS2_AT
-         && pr.tokens[4] == NS2_SET && pr.has_dval[2] && pr.has_dval[3]   // has set and double value for time and nodeid
-         && ( pr.tokens[5] == NS2_X_COORD || pr.tokens[5] == NS2_Y_COORD || pr.tokens[5] == NS2_Z_COORD) // has X_, Y_ or Z_?
-         && pr.has_dval[2]; // time is a number
+         && pr.tokens[4] == NS2_SET && pr.has_dval[2] && pr.has_dval[6]   // has set and double value for time and position?
+         && ( pr.tokens[5] == NS2_X_COORD || pr.tokens[5] == NS2_Y_COORD || pr.tokens[5] == NS2_Z_COORD); // has X_, Y_ or Z_?
 }
 
 bool
 IsSchedMobilityPos (ParseResult pr)
 {
-  //     number of tokens      and    has $ns_                and    has at
-  return pr.tokens.size () == 8 && pr.tokens[0] == NS2_NS_SCH && pr.tokens[1] == NS2_AT
-         //    time             x coord          y coord          velocity are numbers?
+  //     number of tokens for 2D or number of tokens for 3D and velocity are numbers?
+  return (pr.tokens.size () == 8 || (pr.tokens.size () == 9 && pr.has_dval[8]))
+         // and has $ns_               and    has at
+         && pr.tokens[0] == NS2_NS_SCH && pr.tokens[1] == NS2_AT
+         //    time             x coord          y coord          velocity/z coord are numbers?
          && pr.has_dval[2] && pr.has_dval[5] && pr.has_dval[6] && pr.has_dval[7]
          && pr.tokens[4] == NS2_SETDEST; // and has setdest
 
@@ -731,13 +754,14 @@ IsSchedMobilityPos (ParseResult pr)
 
 DestinationPoint
 SetMovement (Ptr<ConstantVelocityMobilityModel> model, Vector last_pos, double at,
-             double xFinalPosition, double yFinalPosition, double speed)
+             Vector finalPosition, double speed)
 {
   DestinationPoint retval;
   retval.m_startPosition = last_pos;
   retval.m_finalPosition = last_pos;
   retval.m_travelStartTime = at;
   retval.m_targetArrivalTime = at;
+  Vector velocity;
 
   if (speed == 0)
     {
@@ -749,27 +773,27 @@ SetMovement (Ptr<ConstantVelocityMobilityModel> model, Vector last_pos, double a
   if (speed > 0)
     {
       // first calculate the time; time = distance / speed
-      double time = std::sqrt (std::pow (xFinalPosition - retval.m_finalPosition.x, 2) + std::pow (yFinalPosition - retval.m_finalPosition.y, 2)) / speed;
-      NS_LOG_DEBUG ("at=" << at << " time=" << time);
+      double time = std::sqrt (std::pow (finalPosition.x - retval.m_finalPosition.x, 2) + std::pow (finalPosition.y - retval.m_finalPosition.y, 2)
+                              + std::pow (finalPosition.z - retval.m_finalPosition.z, 2)) / speed;
+      NS_LOG_DEBUG ("at= " << at << "s, set new destination for time= " << time <<"s");
       if (time == 0)
         {
           return retval;
         }
-      // now calculate the xSpeed = distance / time
-      double xSpeed = (xFinalPosition - retval.m_finalPosition.x) / time;
-      double ySpeed = (yFinalPosition - retval.m_finalPosition.y) / time; // & same with ySpeed
-      retval.m_speed = Vector (xSpeed, ySpeed, 0);
+      // now calculate the xVelocity = distance / time
+      velocity.x = (finalPosition.x - retval.m_finalPosition.x) / time;
+      velocity.y = (finalPosition.y - retval.m_finalPosition.y) / time; // & same with yVelocity
+      velocity.z = (finalPosition.z - retval.m_finalPosition.z) / time; // & same with zVelocity
+      retval.m_speed = velocity;
 
-      // quick and dirty set zSpeed = 0
-      double zSpeed = 0;
-
-      NS_LOG_DEBUG ("Calculated Speed: X=" << xSpeed << " Y=" << ySpeed << " Z=" << zSpeed);
+      NS_LOG_DEBUG ("Calculated Speed: X=" << velocity.x << " Y=" << velocity.y << " Z=" << velocity.z);
 
       // Set the Values
-      Simulator::Schedule (Seconds (at), &ConstantVelocityMobilityModel::SetVelocity, model, Vector (xSpeed, ySpeed, zSpeed));
+      Simulator::Schedule (Seconds (at), &ConstantVelocityMobilityModel::SetVelocity, model, velocity);
       retval.m_stopEvent = Simulator::Schedule (Seconds (at + time), &ConstantVelocityMobilityModel::SetVelocity, model, Vector (0, 0, 0));
-      retval.m_finalPosition.x += xSpeed * time;
-      retval.m_finalPosition.y += ySpeed * time;
+      retval.m_finalPosition.x += velocity.x * time;
+      retval.m_finalPosition.y += velocity.y * time;
+      retval.m_finalPosition.z += velocity.z * time;
       retval.m_targetArrivalTime += time;
     }
   return retval;
@@ -791,16 +815,11 @@ SetInitialPosition (Ptr<ConstantVelocityMobilityModel> model, std::string coord,
 
 // Schedule a set of position for a node
 Vector
-SetSchedPosition (Ptr<ConstantVelocityMobilityModel> model, double at, std::string coord, double coordVal)
+SetSchedPosition (Ptr<ConstantVelocityMobilityModel> model, Vector last_pos, double at, std::string coord, double coordVal)
 {
   // update position
-  model->SetPosition (SetOneInitialCoord (model->GetPosition (), coord, coordVal));
-
-  Vector position;
-  position.x = model->GetPosition ().x;
-  position.y = model->GetPosition ().y;
-  position.z = model->GetPosition ().z;
-
+  Vector position = SetOneInitialCoord (last_pos, coord, coordVal);
+  
   // Chedule next positions
   Simulator::Schedule (Seconds (at), &ConstantVelocityMobilityModel::SetPosition, model,position);
 
