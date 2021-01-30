@@ -1,0 +1,4 @@
+[submodule "src/ofswitch13/lib/ofsoftswitch13"]
+	path = src/ofswitch13/lib/ofsoftswitch13
+	url = https://github.com/ljerezchaves/ofsoftswitch13
+	branch = ns3lib
