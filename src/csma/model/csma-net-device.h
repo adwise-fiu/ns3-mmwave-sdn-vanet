@@ -308,6 +308,14 @@ public:
   virtual bool NeedsArp (void) const;
 
   /**
+   * Set the callback used to notify the OpenFlow when a packet has been
+   * received by this device.
+   *
+   * \param cb The callback.
+   */
+  virtual void SetOpenFlowReceiveCallback (NetDevice::PromiscReceiveCallback cb);
+  
+  /**
    * Set the callback to be used to notify higher layers when a packet has been
    * received.
    *
@@ -697,6 +705,11 @@ private:
    */
   Mac48Address m_address;
 
+  /**
+   * The OpenFlow receive callback.
+   */
+  NetDevice::PromiscReceiveCallback m_openFlowRxCallback;
+  
   /**
    * The callback used to notify higher layers that a packet has been received.
    */

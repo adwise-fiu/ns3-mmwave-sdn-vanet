@@ -146,6 +146,14 @@ public:
   virtual bool SupportsSendFrom () const;
   virtual bool IsBridge (void) const;
 
+  /**
+   * Set the callback used to notify the OpenFlow when a packet has been
+   * received by this device.
+   *
+   * \param cb The OpenFlow receive callback.
+   */
+  virtual void SetOpenFlowReceiveCallback (NetDevice::PromiscReceiveCallback cb);
+
 protected:
 
   virtual void DoDispose (void);
@@ -168,6 +176,9 @@ private:
   bool m_needsArp;
   bool m_supportsSendFrom;
   bool m_isPointToPoint;
+
+  /** The OpenFlow receive callback. */
+  NetDevice::PromiscReceiveCallback m_openFlowRxCallback;
 };
 
 } // namespace ns3

@@ -1,10 +1,34 @@
-# mmWave ns-3 module #
+# Integration of SDN with wireless interfaces including Cellular mmWave for simulations in ns-3 v3.29
 
-This is an [ns-3](https://www.nsnam.org "ns-3 Website") mmWave module for the simulation
-of 5G mmWave cellular networks. A description of this module can be found on [IEEExplore (open access)](https://ieeexplore.ieee.org/document/8344116/ "mmwave paper").
+This code integrates modules from two repositories along with other improvements to expand the functionality to wireless interfaces.
+This work aims to serve as a framework for simulation of scenarios integrating SDN on vehicular adhoc networks (VANET).
+
+## Clonage instructions
+
+This repository uses library *ofsoftswitch13* as a submodule. Therefore, to clone the repository, use:
+
+```
+git clone --recurse-submodules https://github.com/ogbautista/ns3-mmwave-sdn-vanet.git
+```
+
+### Compiling *ofsoftswitch13* as a static library
+
+To compile the *ofsoftswitch13* library, follow this steps:
+```
+cd src/ofswitch13/lib/ofsoftswitch13
+./boot.sh
+./configure --enable-ns3-lib
+make
+```
+
+Once  everything  gets  compiled,   the  static  library `libns3ofswitch13.a` file  will  be  available  under  the `ofswitch13/lib/ofsoftswitch13/udatapath` directory
+
+## mmWave ns-3 module v2.0
+
+This is based on the mmWave [version 2.0](https://github.com/nyuwireless-unipd/ns3-mmwave/releases/tag/V2.0 "mmWave 2.0 github repository") module for the simulation of G mmWave cellular networks. A description of this module can be found on [IEEExplore (open access)](https://ieeexplore.ieee.org/document/8344116/ "mmwave paper").
 
 The mmWave module for ns-3 can be used to simulate 5G cellular networks at mmWave frequencies. 
-This module builds on top of the LTE one, and currently includes features such as:
+This module builds on top of the LTE one, and version 2.0 includes features such as:
 - Support of a wide range of channel models, including the latest 3GPP model for frequency spectrum above 6 GHz. Ray tracing and measured traces can also be modeled.
 - Custom PHY and MAC classes, inspired to the PHY and MAC of 3GPP NR. They support dynamic TDD, and are parameterized and highly customizable in order to be flexible enough for testing different designs.
 - Custom schedulers for the dynamic TDD format
@@ -13,37 +37,17 @@ This module builds on top of the LTE one, and currently includes features such a
 - Dual Connectivity with LTE base stations, with fast secondary cell handover and channel tracking
 - Simulation of core network elements (with also the MME as a real node)
 
-The following papers describe in detail the features implemented in the mmWave module:
-- [End-to-End Simulation of 5G mmWave Networks](https://ieeexplore.ieee.org/document/8344116/ "comst paper") is a comprehensive tutorial with a detailed description of the whole module. We advise the researchers interested in this module to start reading from this paper;
-- [Integration of Carrier Aggregation and Dual Connectivity for the ns-3 mmWave Module](https://arxiv.org/abs/1802.06706 "wns3 2018") describes the Carrier Aggregation implementation;
-- [ns-3 Implementation of the 3GPP MIMO Channel Model for Frequency Spectrum above 6 GHz](https://dl.acm.org/citation.cfm?id=3067678 "wns3 2017") describes the implementation of the 3GPP channel model;
-- [Multi-Sector and Multi-Panel Performance in 5G mmWave Cellular Networks](https://arxiv.org/abs/1808.04905 "globecom2018") describes the multi-sector addition to the 3GPP channel model;
-- [Performance Comparison of Dual Connectivity and Hard Handover for LTE-5G Tight Integration](https://arxiv.org/abs/1607.05425 "simutools paper") describes the Dual Connectivity feature.
+## OpenFlow ns-3 module v1.3
 
-If you use this module in your research, please cite
-M. Mezzavilla, M. Zhang, M. Polese, R. Ford, S. Dutta, S. Rangan, M. Zorzi, _"End-to-End Simulation of 5G mmWave Networks,"_ in IEEE Communications Surveys & Tutorials, vol. 20, no. 3, pp. 2237-2263, thirdquarter 2018. [bibtex available here](https://ieeexplore.ieee.org/document/8344116/)
+This is the OFSwitch13 module, which enhances the [ns-3 Network Simulator][ns-3] with [OpenFlow 1.3][ofp13] capabilities, allowing ns-3 users to simulate Software-Defined Networks (SDN). 
+This module implements the interface for interconnecting the ns-3 simulator to the [OpenFlow 1.3 Software Switch for ns-3][ofs13] (ofsoftswitch13) library. It is the library that, in fact, provides the switch implementation, the library for converting to/from OpenFlow 1.3 wire format, and the dpctl tool for configuring the switch from the console.
 
-## Future work
-We are actively developing new features for the mmWave module, including:
-- 3GPP NR beam tracking
-- 3GPP NR Integrated Access and Backhaul feature (see [this repo](https://github.com/signetlabdei/ns3-mmwave-iab) for more details)
-
-## About
-This module is being developed by [NYU Wireless](http://wireless.engineering.nyu.edu/) and the [University of Padova](http://mmwave.dei.unipd.it/).
-This  work  was  supported  in  part by  the  U.S.  Department  of  Commerce  National  Institute  of  Standards  and Technology through the Project “An End-to-End Research Platform for Public Safety  Communications  above  6  GHz”  under  Award  70NANB17H16.
-
-
-
-<!-- The new-handover branch offers integration between LTE and mmWave and dual connectivity features.
- -->
-
-## Authors ##
-
-The authors of the mmWave module are listed in [this file](https://github.com/nyuwireless-unipd/ns3-mmwave/blob/new-handover/src/mmwave/AUTHORS).
+Please, visit the [OFSwitch13 project homepage][project] for detailed information on the module design, documentation, and *how to get started* tutorials. The code API documentation for the latest release of this project is available [here][apidoc].
 
 ## License ##
 
-This software is licensed under the terms of the GNU GPLv2, as like as ns-3. See the LICENSE file for more details.
+The cellular mmWave software is licensed under the terms of the [GNU GPLv2 license][gpl], as like as ns-3. See the LICENSE file for more details.
+The OFSwitch13 module is free software, licensed under the [GNU GPLv2 license][gpl], and is publicly available for research, development, and use.
 
 
 ## The Network Simulator, Version 3 ##
@@ -60,11 +64,11 @@ Table of Contents:
 Note:  Much more substantial information about ns-3 can be found at
 http://www.nsnam.org
 
-1) An Open Source project
--------------------------
+#### 1) An Open Source project
+------------------------------
 
 ns-3 is a free open source project aiming to build a discrete-event
-network simulator targeted for simulation research and education.   
+network simulator targeted for simulation research and education.
 This is a collaborative project; we hope that
 the missing pieces of the models we have not yet implemented
 will be contributed by the community in an open collaboration
@@ -80,8 +84,8 @@ This README excerpts some details from a more extensive
 tutorial that is maintained at:
 http://www.nsnam.org/documentation/latest/
 
-2) Building ns-3
-----------------
+#### 2) Building ns-3
+---------------------
 
 The code for the framework and the default models provided
 by ns-3 is built as a set of libraries. User simulations
@@ -112,8 +116,8 @@ set of platforms listed in the RELEASE_NOTES file.
 Other platforms may or may not work: we welcome patches to 
 improve the portability of the code to these other platforms. 
 
-3) Running ns-3
----------------
+#### 3) Running ns-3
+--------------------
 
 On recent Linux systems, once you have built ns-3 (with examples
 enabled), it should be easy to run the sample programs with the
@@ -126,8 +130,8 @@ trace file and a set of simple-global-routing-xx-xx.pcap binary
 pcap trace files, which can be read by tcpdump -tt -r filename.pcap
 The program source can be found in the examples/routing directory.
 
-4) Getting access to the ns-3 documentation
--------------------------------------------
+#### 4) Getting access to the ns-3 documentation
+------------------------------------------------
 
 Once you have verified that your build of ns-3 works by running
 the simple-point-to-point example as outlined in 4) above, it is
@@ -152,8 +156,8 @@ This documentation includes:
     as introductory text:
     http://www.nsnam.org/doxygen/index.html
 
-5) Working with the development version of ns-3
------------------------------------------------
+#### 5) Working with the development version of ns-3
+----------------------------------------------------
 
 If you want to download and use the development version 
 of ns-3, you need to use the tool 'mercurial'. A quick and
@@ -165,3 +169,10 @@ familiar with it.
 If you have successfully installed mercurial, you can get
 a copy of the development version with the following command:
 "hg clone http://code.nsnam.org/ns-3-dev"
+
+[ns-3]: https://www.nsnam.org
+[ofp13]: https://www.opennetworking.org/sdn-resources/technical-library
+[ofs13]: https://github.com/ljerezchaves/ofsoftswitch13
+[project]: http://www.lrc.ic.unicamp.br/ofswitch13/
+[apidoc]: http://www.lrc.ic.unicamp.br/ofswitch13/doc/html/index.html
+[gpl]: http://www.gnu.org/copyleft/gpl.html

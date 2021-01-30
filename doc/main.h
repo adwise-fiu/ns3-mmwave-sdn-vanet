@@ -51,6 +51,7 @@
  *     - nix-vector-routing
  *     - ns3tcp
  *     - ns3wifi
+ *     - ofswitch13
  *     - olsr
  *     - openflow
  *     - point-to-point

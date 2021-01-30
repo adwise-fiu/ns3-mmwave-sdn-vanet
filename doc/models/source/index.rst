@@ -40,6 +40,7 @@ This document is written in `reStructuredText <http://docutils.sourceforge.net/r
    mobility
    network
    nix-vector-routing
+   ofswitch13
    olsr
    openflow-switch
    point-to-point
