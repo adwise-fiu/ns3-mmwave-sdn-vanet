@@ -106,6 +106,8 @@ public:
    */
   bool PortUpdateState ();
 
+  bool PortUpdateState (bool in5gRange);
+
   /**
    * Send a packet over this OpenFlow switch port. It will check port
    * configuration, update counters and send the packet to the underlying

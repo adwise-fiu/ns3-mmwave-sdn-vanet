@@ -74,6 +74,7 @@
 #include <ns3/lte-enb-mac.h>
 #include <ns3/lte-enb-net-device.h>
 #include <ns3/lte-enb-phy.h>
+#include <ns3/lte-ue-net-device.h>
 #include <ns3/ff-mac-scheduler.h>
 #include <ns3/lte-handover-algorithm.h>
 #include <ns3/epc-enb-s1-sap.h>
@@ -113,6 +114,7 @@ public:
 
 	NetDeviceContainer InstallUeDevice (NodeContainer c);
 	NetDeviceContainer InstallMcUeDevice (NodeContainer c);
+	NetDeviceContainer InstallLteUeDevice (NodeContainer c);
 	NetDeviceContainer InstallInterRatHoCapableUeDevice(NodeContainer c);
 	NetDeviceContainer InstallEnbDevice (NodeContainer c);
 	NetDeviceContainer InstallLteEnbDevice (NodeContainer c);
@@ -154,6 +156,10 @@ public:
 	 * Attach MC ueDevices to the closest LTE enbDevice, register all MmWave eNBs to the MmWaveUePhy
 	 */
 	void AttachToClosestEnb (NetDeviceContainer ueDevices, NetDeviceContainer mmWaveEnbDevices, NetDeviceContainer lteEnbDevices);
+	/**
+	 * Attach MC ueDevices to the closest LTE enbDevice only
+	 */
+	void AttachToClosestLteEnb (NetDeviceContainer ueDevices, NetDeviceContainer lteEnbDevices);
 
 	/**
 	 * Attach MC ueDevices to the closest MmWave eNB device, register all MmWave eNBs to the MmWaveUePhy,
@@ -284,6 +290,7 @@ private:
 
 	Ptr<NetDevice> InstallSingleUeDevice (Ptr<Node> n);
 	Ptr<NetDevice> InstallSingleMcUeDevice (Ptr<Node> n);
+	Ptr<NetDevice> InstallSingleLteUeDevice (Ptr<Node> n);
 	Ptr<NetDevice> InstallSingleEnbDevice (Ptr<Node> n);
 	Ptr<NetDevice> InstallSingleLteEnbDevice (Ptr<Node> n);
 	Ptr<NetDevice> InstallSingleInterRatHoCapableUeDevice(Ptr<Node> n);
@@ -326,6 +333,7 @@ private:
 	ObjectFactory m_lteEnbNetDeviceFactory;
 	ObjectFactory m_ueNetDeviceFactory;
 	ObjectFactory m_mcUeNetDeviceFactory;
+	ObjectFactory m_lteUeNetDeviceFactory;
 	ObjectFactory m_channelFactory; 	// TODO check if one factory for the channel is enough
 	ObjectFactory m_pathlossModelFactory;	// Each channel (mmWave, LteUl & LteDl) may have a different pathloss with diff attributes
 	ObjectFactory m_schedulerFactory;

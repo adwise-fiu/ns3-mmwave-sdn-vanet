@@ -35,6 +35,11 @@
 #include <ns3/ipv4-l3-protocol.h>
 #include "mmwave-net-device.h"
 
+#include <ns3/ethernet-header.h>
+#include <ns3/ethernet-trailer.h>
+
+#undef NS_LOG_APPEND_CONTEXT
+#define NS_LOG_APPEND_CONTEXT std::clog << "[mac=" << GetAddress() << "] "
 
 namespace ns3 {
 
@@ -197,6 +202,13 @@ MmWaveNetDevice::SetReceiveCallback (ReceiveCallback cb)
 }
 
 void
+MmWaveNetDevice::SetOpenFlowReceiveCallback (NetDevice::PromiscReceiveCallback cb)
+{
+  NS_LOG_FUNCTION (&cb);
+  m_openFlowRxCallback = cb;
+}
+
+void
 MmWaveNetDevice::SetPromiscReceiveCallback (PromiscReceiveCallback cb)
 {
 
@@ -211,8 +223,54 @@ MmWaveNetDevice::SupportsSendFrom (void) const
 void
 MmWaveNetDevice::Receive (Ptr<Packet> p)
 {
-	NS_LOG_FUNCTION (this << p);
-	m_rxCallback (this, p, Ipv4L3Protocol::PROT_NUMBER, Address ());
+  NS_LOG_FUNCTION (this << p);
+  //
+  // Check if this device is configure as an OpenFlow switch port.
+  //
+  NS_LOG_INFO (Simulator::Now());
+	NS_LOG_INFO ("MmWaveNetDevice: Received packet Uid " << p->GetUid() << " with size: " << p->GetSize() << ", serialized size: " << p->GetSerializedSize() );
+  // NS_LOG_INFO ("Packet: " << p->ToString());
+  if (!m_openFlowRxCallback.IsNull ())
+    {
+      // We forward the original packet to the
+      // OpenFlow receive callback for the packetType we receive
+      // and we set the type to otherhost
+
+      // We need to deliver an Ethernet frame,
+      // to be processed adequately by the OpenFlow controller
+      Mac48Address from = m_macaddress;
+
+      if (p->GetSize () < 46)
+        {
+          uint8_t buffer[46];
+          memset (buffer, 0, 46);
+          Ptr<Packet> padd = Create<Packet> (buffer, 46 - p->GetSize ());
+          p->AddAtEnd (padd);
+        }
+
+      EthernetHeader ethHeader (false);
+      ethHeader.SetSource (from);
+      ethHeader.SetLengthType (Ipv4L3Protocol::PROT_NUMBER);
+      p->AddHeader (ethHeader);
+
+      EthernetTrailer trailer;
+      if (Node::ChecksumEnabled ())
+        {
+          trailer.EnableFcs (true);
+        }
+      trailer.CalcFcs (p);
+      p->AddTrailer (trailer);
+
+      // NS_LOG_INFO ("MmWaveNetDevice: Packet encapsulated into a DIX Ethernet frame");
+      // NS_LOG_INFO ("Packet size: " << p->GetSize() << ", serialized size: " << p->GetSerializedSize());
+      // NS_LOG_INFO ("Packet: " << p->ToString());
+      // The address specified does not  matter, it is not used for other than logging
+      // The packet is going to be handled according to predefined rules in the openflow switch
+      m_openFlowRxCallback (this, p, Ipv4L3Protocol::PROT_NUMBER, from, Mac48Address ("00:00:00:00:10:00"),
+                            NetDevice::PACKET_OTHERHOST);
+      return;
+    }
+  m_rxCallback (this, p, Ipv4L3Protocol::PROT_NUMBER, Address ());
 }
 
 bool

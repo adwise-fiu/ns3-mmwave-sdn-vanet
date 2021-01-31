@@ -67,6 +67,8 @@ public:
   virtual ~LteUeNetDevice (void);
   virtual void DoDispose ();
 
+  // inherited from NetDevice
+  virtual bool SendFrom (Ptr<Packet> packet, const Address& source, const Address& dest, uint16_t protocolNumber);
 
   // inherited from NetDevice
   virtual bool Send (Ptr<Packet> packet, const Address& dest, uint16_t protocolNumber);

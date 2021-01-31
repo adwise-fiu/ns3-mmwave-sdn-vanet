@@ -21,6 +21,7 @@
 #include <ns3/object-vector.h>
 #include "ofswitch13-device.h"
 #include "ofswitch13-port.h"
+#include <ns3/mobility-model.h>
 
 #undef NS_LOG_APPEND_CONTEXT
 #define NS_LOG_APPEND_CONTEXT                 \
@@ -49,7 +50,9 @@ OFSwitch13Device::OFSwitch13Device ()
   m_cGroupMod (0),
   m_cMeterMod (0),
   m_cPacketIn (0),
-  m_cPacketOut (0)
+  m_cPacketOut (0),
+  m_5gCoverage (false),
+  m_firstLocationFetch (true)
 {
   NS_LOG_FUNCTION (this);
   NS_LOG_INFO ("OpenFlow version: " << OFP_VERSION);
@@ -467,7 +470,7 @@ OFSwitch13Device::ReceiveFromSwitchPort (Ptr<Packet> packet, uint32_t portNo,
 void
 OFSwitch13Device::StartControllerConnection (Address ctrlAddr)
 {
-  NS_LOG_FUNCTION (this << ctrlAddr);
+  NS_LOG_FUNCTION (this << ctrlAddr << Simulator::Now());
 
   NS_ASSERT (!ctrlAddr.IsInvalid ());
   NS_ASSERT_MSG (InetSocketAddress::IsMatchingType (ctrlAddr),
@@ -481,6 +484,7 @@ OFSwitch13Device::StartControllerConnection (Address ctrlAddr)
   Ptr<Socket> ctrlSocket = Socket::CreateSocket (GetObject<Node> (), tcpFact);
   ctrlSocket->SetAttribute ("SegmentSize", UintegerValue (8900));
 
+  ctrlSocket->BindToNetDevice (GetObject<Node> ()->GetDevice(1));
   error = ctrlSocket->Bind ();
   if (error)
     {
@@ -828,9 +832,45 @@ OFSwitch13Device::DatapathTimeout (struct datapath *dp)
   meter_table_add_tokens (dp->meters);
   pipeline_timeout (dp->pipeline);
 
+  bool in5gRange;
+  if (!m_firstLocationFetch)
+    {
+      int minDistance = -1;
+      Vector position = GetNode ()->GetObject<MobilityModel> ()->GetPosition ();
+
+      for (std::vector<Vector>::iterator i = m_mmWaveEnbLocations.begin(); i != m_mmWaveEnbLocations.end(); i++)
+        {
+          uint32_t distance = CalculateDistance (position, *i);
+          if (minDistance >= 0)
+            {
+              minDistance = (distance < (uint32_t) minDistance) ? distance : minDistance;
+            }
+          else
+            {
+              minDistance = distance;
+            }
+        }
+      in5gRange = (minDistance <= 110) ? true : false;
+      std::cout << Simulator::Now() << " Min. distance= " << minDistance << std::endl;
+       if (m_5gCoverage && !in5gRange)
+        {
+          std::cout << "*** Car went out of 5G Coverage ***" << std::endl;
+        }
+      else if (!m_5gCoverage && in5gRange)
+        {
+          std::cout << "*** Car entered 5G Coverage ***" << std::endl;
+        }
+      m_5gCoverage = in5gRange;
+    }
+  else
+    {
+      m_firstLocationFetch = false;
+    }
+
   // Check for chan/s in links (port) status.
   for (auto const &port : m_ports)
     {
+      // port->PortUpdateState (in5gRange);
       port->PortUpdateState ();
     }
 
@@ -869,7 +909,7 @@ OFSwitch13Device::SendPacketInMessage (struct packet *pkt, uint8_t tableId,
                                        uint8_t reason, uint16_t maxLength,
                                        uint64_t cookie)
 {
-  NS_LOG_FUNCTION (this << pkt->ns3_uid << tableId << reason);
+  NS_LOG_FUNCTION (this << pkt->ns3_uid << tableId << reason << Simulator::Now());
 
   // Create the packet_in message.
   struct ofl_msg_packet_in msg;
@@ -995,7 +1035,7 @@ OFSwitch13Device::SendToController (Ptr<Packet> packet,
 void
 OFSwitch13Device::ReceiveFromController (Ptr<Packet> packet, Address from)
 {
-  NS_LOG_FUNCTION (this << packet << from);
+  NS_LOG_FUNCTION (this << packet << from << Simulator::Now());
 
   struct ofl_msg_header *msg;
   ofl_err error;
@@ -1129,7 +1169,7 @@ OFSwitch13Device::ReplyWithErrorMessage (ofl_err error, struct ofpbuf *buffer,
 void
 OFSwitch13Device::SocketCtrlSucceeded (Ptr<Socket> socket)
 {
-  NS_LOG_FUNCTION (this << socket);
+  NS_LOG_FUNCTION (this << socket << Simulator::Now());
 
   NS_LOG_INFO ("Controller accepted connection request!");
   Ptr<RemoteController> remoteCtrl = GetRemoteController (socket);
@@ -1157,7 +1197,7 @@ OFSwitch13Device::SocketCtrlSucceeded (Ptr<Socket> socket)
 void
 OFSwitch13Device::SocketCtrlFailed (Ptr<Socket> socket)
 {
-  NS_LOG_FUNCTION (this << socket);
+  NS_LOG_FUNCTION (this << socket << Simulator::Now());
 
   NS_LOG_ERROR ("Controller did not accepted connection request!");
 
@@ -1500,6 +1540,24 @@ OFSwitch13Device::PipelinePacket::HasId (uint64_t id)
         }
     }
   return false;
+}
+
+void
+OFSwitch13Device::SetNode (Ptr<Node> node)
+{
+  m_node = node;
+}
+
+Ptr<Node>
+OFSwitch13Device::GetNode ()
+{
+  return m_node;
+}
+
+void
+OFSwitch13Device::AddmmWaveEnbLocation (Vector location)
+{
+  m_mmWaveEnbLocations.push_back (location);
 }
 
 } // namespace ns3

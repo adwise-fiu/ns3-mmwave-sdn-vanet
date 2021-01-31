@@ -61,7 +61,9 @@
 #include <ns3/lte-ue-component-carrier-manager.h>
 #include <ns3/cc-helper.h>
 #include <ns3/object-map.h>
-
+#include <ns3/lte-ue-net-device.h>
+#include <ns3/lte-rrc-protocol-ideal.h>
+#include <ns3/lte-rrc-protocol-real.h>
 
 namespace ns3 {
 
@@ -90,6 +92,7 @@ MmWaveHelper::MmWaveHelper(void)
 	m_enbNetDeviceFactory.SetTypeId (MmWaveEnbNetDevice::GetTypeId ());
 	m_lteEnbNetDeviceFactory.SetTypeId (LteEnbNetDevice::GetTypeId ());
 	m_ueNetDeviceFactory.SetTypeId (MmWaveUeNetDevice::GetTypeId ());
+	m_lteUeNetDeviceFactory.SetTypeId (LteUeNetDevice::GetTypeId());
 
 	m_mcUeNetDeviceFactory.SetTypeId (McUeNetDevice::GetTypeId ());
 	m_enbAntennaModelFactory.SetTypeId (AntennaArrayModel::GetTypeId ());
@@ -649,6 +652,21 @@ MmWaveHelper::InstallMcUeDevice (NodeContainer c) {
 }
 
 NetDeviceContainer
+MmWaveHelper::InstallLteUeDevice (NodeContainer c) {
+	NS_LOG_FUNCTION (this);
+	Initialize ();  // Run DoInitialize (), if necessary
+	NetDeviceContainer devices;
+	for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
+	  {
+	    Ptr<Node> node = *i;
+	    Ptr<NetDevice> device = InstallSingleLteUeDevice (node);
+	    device->SetAddress (Mac64Address::Allocate ());
+	    devices.Add (device);
+	  }
+	return devices;
+}
+
+NetDeviceContainer
 MmWaveHelper::InstallInterRatHoCapableUeDevice (NodeContainer c) {
 	NS_LOG_FUNCTION (this);
 	Initialize ();  // Run DoInitialize (), if necessary
@@ -1081,6 +1099,193 @@ MmWaveHelper::InstallSingleMcUeDevice(Ptr<Node> n)
   n->AddDevice (device);
 
 	lteNas->SetForwardUpCallback (MakeCallback (&McUeNetDevice::Receive, device));
+
+  if (m_epcHelper != 0)
+    {
+      m_epcHelper->AddUe (device, device->GetImsi ());
+    }
+
+  device->Initialize ();
+	return device;
+}
+
+Ptr<NetDevice>
+MmWaveHelper::InstallSingleLteUeDevice(Ptr<Node> n)
+{
+	NS_LOG_FUNCTION (this);
+
+
+	NS_ABORT_MSG_IF (m_imsiCounter >= 0xFFFFFFFF, "max num UEs exceeded");
+	uint64_t imsi = ++m_imsiCounter;
+
+	Ptr<LteUeNetDevice> device = m_lteUeNetDeviceFactory.Create<LteUeNetDevice> ();
+
+	// LTE phy, mac and channel
+	NS_ABORT_MSG_IF (m_lteComponentCarrierPhyParams.size() == 0 && m_lteUseCa, "If CA is enabled, before call this method you need to install Enbs --> InstallLteEnbDevice()");
+	std::map<uint8_t, Ptr<ComponentCarrierUe> > lteUeCcMap;
+
+	for (std::map< uint8_t, ComponentCarrier >::iterator it = m_lteComponentCarrierPhyParams.begin() ; it != m_lteComponentCarrierPhyParams.end(); ++it)
+		{
+			Ptr <ComponentCarrierUe> cc =  CreateObject<ComponentCarrierUe> ();
+			cc->SetUlBandwidth ( it->second.GetUlBandwidth ());
+			cc->SetDlBandwidth ( it->second.GetDlBandwidth ());
+			cc->SetDlEarfcn ( it->second.GetDlEarfcn ());
+			cc->SetUlEarfcn ( it->second.GetUlEarfcn ());
+			cc->SetAsPrimary (it->second.IsPrimary());
+			Ptr<LteUeMac> mac = CreateObject<LteUeMac> ();
+			cc->SetMac (mac);
+			// cc->GetPhy ()->Initialize (); // it is initialized within the LteUeNetDevice::DoInitialize ()
+			lteUeCcMap.insert (std::pair<uint8_t, Ptr<ComponentCarrierUe> > (it->first, cc));
+		}
+
+	for (std::map<uint8_t, Ptr<ComponentCarrierUe> >::iterator it = lteUeCcMap.begin (); it != lteUeCcMap.end (); ++it)
+		{
+			Ptr<LteSpectrumPhy> dlPhy = CreateObject<LteSpectrumPhy> ();
+			Ptr<LteSpectrumPhy> ulPhy = CreateObject<LteSpectrumPhy> ();
+
+			Ptr<LteUePhy> phy = CreateObject<LteUePhy> (dlPhy, ulPhy);
+
+			Ptr<LteHarqPhy> harq = Create<LteHarqPhy> ();
+			dlPhy->SetHarqPhyModule (harq);
+			ulPhy->SetHarqPhyModule (harq);
+			phy->SetHarqPhyModule (harq);
+
+			Ptr<LteChunkProcessor> pRs = Create<LteChunkProcessor> ();
+			pRs->AddCallback (MakeCallback (&LteUePhy::ReportRsReceivedPower, phy));
+			dlPhy->AddRsPowerChunkProcessor (pRs);
+
+			Ptr<LteChunkProcessor> pInterf = Create<LteChunkProcessor> ();
+			pInterf->AddCallback (MakeCallback (&LteUePhy::ReportInterference, phy));
+			dlPhy->AddInterferenceCtrlChunkProcessor (pInterf);   // for RSRQ evaluation of UE Measurements
+
+			Ptr<LteChunkProcessor> pCtrl = Create<LteChunkProcessor> ();
+			pCtrl->AddCallback (MakeCallback (&LteSpectrumPhy::UpdateSinrPerceived, dlPhy));
+			dlPhy->AddCtrlSinrChunkProcessor (pCtrl);
+
+			Ptr<LteChunkProcessor> pData = Create<LteChunkProcessor> ();
+			pData->AddCallback (MakeCallback (&LteSpectrumPhy::UpdateSinrPerceived, dlPhy));
+			dlPhy->AddDataSinrChunkProcessor (pData);
+
+			if (m_usePdschForCqiGeneration)
+				{
+					// CQI calculation based on PDCCH for signal and PDSCH for interference
+					pCtrl->AddCallback (MakeCallback (&LteUePhy::GenerateMixedCqiReport, phy));
+					Ptr<LteChunkProcessor> pDataInterf = Create<LteChunkProcessor> ();
+					pDataInterf->AddCallback (MakeCallback (&LteUePhy::ReportDataInterference, phy));
+					dlPhy->AddInterferenceDataChunkProcessor (pDataInterf);
+				}
+			else
+				{
+					// CQI calculation based on PDCCH for both signal and interference
+					pCtrl->AddCallback (MakeCallback (&LteUePhy::GenerateCtrlCqiReport, phy));
+				}
+
+			dlPhy->SetChannel (m_downlinkChannel);
+			ulPhy->SetChannel (m_uplinkChannel);
+
+			Ptr<MobilityModel> mm = n->GetObject<MobilityModel> ();
+			NS_ASSERT_MSG (mm, "MobilityModel needs to be set on node before calling LteHelper::InstallUeDevice ()");
+			dlPhy->SetMobility (mm);
+			ulPhy->SetMobility (mm);
+
+			Ptr<AntennaModel> antenna = (m_lteUeAntennaModelFactory.Create ())->GetObject<AntennaModel> ();
+			NS_ASSERT_MSG (antenna, "error in creating the AntennaModel object");
+			dlPhy->SetAntenna (antenna);
+			ulPhy->SetAntenna (antenna);
+
+			it->second->SetPhy(phy);
+		}
+
+	device->SetNode(n);
+
+	// LTE CCM and RRC
+	Ptr<LteUeComponentCarrierManager> lteCcmUe = m_ueComponentCarrierManagerFactory.Create<LteUeComponentCarrierManager> ();
+	lteCcmUe->SetNumberOfComponentCarriers (m_noOfLteCcs);
+
+	Ptr<LteUeRrc> lteRrc = CreateObject<LteUeRrc> ();
+	lteRrc->m_numberOfComponentCarriers = m_noOfLteCcs;
+	// lteRrc->m_numberOfMmWaveComponentCarriers = m_noOfCcs;
+	// run intializeSap to create the proper number of sap provider/users
+	lteRrc->InitializeSap();
+	lteRrc->SetLteMacSapProvider (lteCcmUe->GetLteMacSapProvider ());
+
+	// setting ComponentCarrierManager SAP
+	lteRrc->SetLteCcmRrcSapProvider (lteCcmUe->GetLteCcmRrcSapProvider ());
+	lteCcmUe->SetLteCcmRrcSapUser (lteRrc->GetLteCcmRrcSapUser ());
+
+	if (m_useIdealRrc)
+	{
+		// Ptr<MmWaveUeRrcProtocolIdeal> rrcProtocol = CreateObject<MmWaveUeRrcProtocolIdeal> ();
+    Ptr<LteUeRrcProtocolIdeal> rrcProtocol = CreateObject<LteUeRrcProtocolIdeal> ();
+		rrcProtocol->SetUeRrc (lteRrc);
+		lteRrc->AggregateObject (rrcProtocol);
+		rrcProtocol->SetLteUeRrcSapProvider (lteRrc->GetLteUeRrcSapProvider ());
+		lteRrc->SetLteUeRrcSapUser (rrcProtocol->GetLteUeRrcSapUser ());
+	}
+	else
+	{
+		// Ptr<MmWaveLteUeRrcProtocolReal> rrcProtocol = CreateObject<MmWaveLteUeRrcProtocolReal> ();
+    Ptr<LteUeRrcProtocolReal> rrcProtocol = CreateObject<LteUeRrcProtocolReal> ();
+		rrcProtocol->SetUeRrc (lteRrc);
+		lteRrc->AggregateObject (rrcProtocol);
+		rrcProtocol->SetLteUeRrcSapProvider (lteRrc->GetLteUeRrcSapProvider ());
+		lteRrc->SetLteUeRrcSapUser (rrcProtocol->GetLteUeRrcSapUser ());
+	}
+
+	if (m_epcHelper != 0)
+		{
+			lteRrc->SetUseRlcSm (false);
+		}
+
+	Ptr<EpcUeNas> lteNas = CreateObject<EpcUeNas> ();
+
+  lteNas->SetAsSapProvider (lteRrc->GetAsSapProvider ());
+  lteRrc->SetAsSapUser (lteNas->GetAsSapUser ());
+
+  for (std::map<uint8_t, Ptr<ComponentCarrierUe> >::iterator it = lteUeCcMap.begin (); it != lteUeCcMap.end (); ++it)
+    {
+      lteRrc->SetLteUeCmacSapProvider (it->second->GetMac ()->GetLteUeCmacSapProvider (), it->first);
+			it->second->GetMac ()->SetLteUeCmacSapUser (lteRrc->GetLteUeCmacSapUser (it->first));
+      it->second->GetMac ()->SetComponentCarrierId (it->first);
+
+      it->second->GetPhy ()->SetLteUeCphySapUser (lteRrc->GetLteUeCphySapUser (it->first));
+      lteRrc->SetLteUeCphySapProvider (it->second->GetPhy ()->GetLteUeCphySapProvider (), it->first);
+      it->second->GetPhy ()->SetComponentCarrierId (it->first);
+
+      it->second->GetPhy ()->SetLteUePhySapUser (it->second->GetMac ()->GetLteUePhySapUser ());
+      it->second->GetMac ()->SetLteUePhySapProvider (it->second->GetPhy ()->GetLteUePhySapProvider ());
+
+      bool ccmTest = lteCcmUe->SetComponentCarrierMacSapProviders (it->first, it->second->GetMac ()->GetLteMacSapProvider());
+
+      if (ccmTest == false)
+        {
+          NS_FATAL_ERROR ("Error in SetComponentCarrierMacSapProviders");
+        }
+    }
+
+  device->SetCcMap (lteUeCcMap);
+  device->SetAttribute ("LteUeRrc", PointerValue (lteRrc));
+  device->SetAttribute ("EpcUeNas", PointerValue (lteNas));
+  device->SetAttribute ("LteUeComponentCarrierManager", PointerValue (lteCcmUe));
+	device->SetAttribute ("Imsi", UintegerValue(imsi));
+
+  for (std::map<uint8_t, Ptr<ComponentCarrierUe> >::iterator it = lteUeCcMap.begin (); it != lteUeCcMap.end (); ++it)
+    {
+      Ptr<LteUePhy> ccPhy = it->second->GetPhy ();
+      ccPhy->SetDevice (device);
+      ccPhy->GetUlSpectrumPhy ()->SetDevice (device);
+      ccPhy->GetDlSpectrumPhy ()->SetDevice (device);
+      ccPhy->GetDlSpectrumPhy ()->SetLtePhyRxDataEndOkCallback (MakeCallback (&LteUePhy::PhyPduReceived, ccPhy));
+      ccPhy->GetDlSpectrumPhy ()->SetLtePhyRxCtrlEndOkCallback (MakeCallback (&LteUePhy::ReceiveLteControlMessageList, ccPhy));
+      ccPhy->GetDlSpectrumPhy ()->SetLtePhyRxPssCallback (MakeCallback (&LteUePhy::ReceivePss, ccPhy));
+      ccPhy->GetDlSpectrumPhy ()->SetLtePhyDlHarqFeedbackCallback (MakeCallback (&LteUePhy::ReceiveLteDlHarqFeedback, ccPhy));
+    }
+
+  lteNas->SetDevice (device);
+
+  n->AddDevice (device);
+
+	lteNas->SetForwardUpCallback (MakeCallback (&LteUeNetDevice::Receive, device));
 
   if (m_epcHelper != 0)
     {
@@ -1990,16 +2195,18 @@ MmWaveHelper::InstallSingleLteEnbDevice (Ptr<Node> n)
 
 	if (m_useIdealRrc)
 	{
-	  Ptr<MmWaveEnbRrcProtocolIdeal> rrcProtocol = CreateObject<MmWaveEnbRrcProtocolIdeal> ();
-	  rrcProtocol->SetLteEnbRrcSapProvider (rrc->GetLteEnbRrcSapProvider ());
+	  // Ptr<MmWaveEnbRrcProtocolIdeal> rrcProtocol = CreateObject<MmWaveEnbRrcProtocolIdeal> ();
+		Ptr<LteEnbRrcProtocolIdeal> rrcProtocol = CreateObject<LteEnbRrcProtocolIdeal> ();
+		rrcProtocol->SetLteEnbRrcSapProvider (rrc->GetLteEnbRrcSapProvider ());
 	  rrc->SetLteEnbRrcSapUser (rrcProtocol->GetLteEnbRrcSapUser ());
 	  rrc->AggregateObject (rrcProtocol);
 	  rrcProtocol->SetCellId (cellId);
 	}
 	else
 	{
-	  Ptr<MmWaveLteEnbRrcProtocolReal> rrcProtocol = CreateObject<MmWaveLteEnbRrcProtocolReal> ();
-	  rrcProtocol->SetLteEnbRrcSapProvider (rrc->GetLteEnbRrcSapProvider ());
+	  // Ptr<MmWaveLteEnbRrcProtocolReal> rrcProtocol = CreateObject<MmWaveLteEnbRrcProtocolReal> ();
+		Ptr<LteEnbRrcProtocolReal> rrcProtocol = CreateObject<LteEnbRrcProtocolReal> ();
+		rrcProtocol->SetLteEnbRrcSapProvider (rrc->GetLteEnbRrcSapProvider ());
 	  rrc->SetLteEnbRrcSapUser (rrcProtocol->GetLteEnbRrcSapUser ());
 	  rrc->AggregateObject (rrcProtocol);
 	  rrcProtocol->SetCellId (cellId);
@@ -2012,10 +2219,10 @@ MmWaveHelper::InstallSingleLteEnbDevice (Ptr<Node> n)
 	  // it does not make sense to use RLC/SM when also using the EPC
 
 // ***************** RDF EDIT 6/9/2016 ***************** //
-//	  if (epsBearerToRlcMapping.Get () == LteEnbRrc::RLC_SM_ALWAYS)
-//	    {
-//	      rrc->SetAttribute ("EpsBearerToRlcMapping", EnumValue (LteEnbRrc::RLC_UM_ALWAYS));
-//	    }
+	  // if (epsBearerToRlcMapping.Get () == LteEnbRrc::RLC_SM_ALWAYS)
+	  //   {
+	  //     rrc->SetAttribute ("EpsBearerToRlcMapping", EnumValue (LteEnbRrc::RLC_UM_ALWAYS));
+	  //   }
 
     if (m_rlcAmEnabled)
       {
@@ -2234,6 +2441,50 @@ MmWaveHelper::AttachToClosestEnb (NetDeviceContainer ueDevices, NetDeviceContain
 		{
 			m_3gppChannel.at(it->first)->Initial(ueDevices,mmWaveEnbDevices);
 		}
+	}
+}
+
+// for LTE devices
+void
+MmWaveHelper::AttachToClosestLteEnb (NetDeviceContainer ueDevices, NetDeviceContainer lteEnbDevices)
+{
+	NS_LOG_FUNCTION (this);
+
+	for (NetDeviceContainer::Iterator ueDev = ueDevices.Begin(); ueDev != ueDevices.End(); ueDev++)
+	{
+    // Ptr<McUeNetDevice> mcDevice = (*ueDev)->GetObject<McUeNetDevice> ();
+		Ptr<LteUeNetDevice> lteUeDevice = (*ueDev)->GetObject<LteUeNetDevice> ();
+		NS_ASSERT_MSG (lteEnbDevices.GetN () > 0, "empty lte or mmwave enb device container");
+
+		// Find the closest LTE station
+		Vector uepos = (*ueDev)->GetNode ()->GetObject<MobilityModel> ()->GetPosition ();
+		double minDistance = std::numeric_limits<double>::infinity ();
+		Ptr<NetDevice> lteClosestEnbDevice;
+		for (NetDeviceContainer::Iterator i = lteEnbDevices.Begin (); i != lteEnbDevices.End (); ++i)
+		{
+			Vector enbpos = (*i)->GetNode ()->GetObject<MobilityModel> ()->GetPosition ();
+			double distance = CalculateDistance (uepos, enbpos);
+			if (distance < minDistance)
+				{
+					minDistance = distance;
+					lteClosestEnbDevice = *i;
+				}
+		}
+		NS_ASSERT (lteClosestEnbDevice != 0);
+		NS_ASSERT (lteClosestEnbDevice->GetObject<LteEnbNetDevice> () != 0); // stop if it is not an LTE eNB
+
+		// Attach the MC device the LTE eNB
+		Ptr<LteEnbNetDevice> enbLteDevice = lteClosestEnbDevice->GetObject<LteEnbNetDevice> ();
+		Ptr<EpcUeNas> lteUeNas = lteUeDevice->GetNas ();
+		lteUeNas->Connect (enbLteDevice->GetCellId (), enbLteDevice->GetDlEarfcn ()); // the MmWaveCell will be automatically selected
+
+		if (m_epcHelper != 0)
+		{
+			// activate default EPS bearer
+			m_epcHelper->ActivateEpsBearer (*ueDev, lteUeNas, lteUeDevice->GetImsi (), EpcTft::Default (), EpsBearer (EpsBearer::NGBR_VIDEO_TCP_DEFAULT));
+		}
+    // mcDevice->SetLteTargetEnb (enbLteDevice);
+		lteUeDevice->SetTargetEnb (enbLteDevice);
 	}
 }
 

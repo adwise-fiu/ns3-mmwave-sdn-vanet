@@ -38,6 +38,12 @@
 #include <ns3/ipv6-l3-protocol.h>
 #include <ns3/log.h>
 
+#include <ns3/ethernet-header.h>
+#include <ns3/ethernet-trailer.h>
+
+#undef NS_LOG_APPEND_CONTEXT
+#define NS_LOG_APPEND_CONTEXT std::clog << "[mac=" << GetAddress() << "] "
+
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("LteNetDevice");
@@ -271,6 +277,12 @@ LteNetDevice::AddLinkChangeCallback (Callback<void> callback)
   m_linkChangeCallbacks.ConnectWithoutContext (callback);
 }
 
+void
+LteNetDevice::SetOpenFlowReceiveCallback (NetDevice::PromiscReceiveCallback cb)
+{
+  NS_LOG_FUNCTION (&cb);
+  m_openFlowRxCallback = cb;
+}
 
 void
 LteNetDevice::SetPromiscReceiveCallback (PromiscReceiveCallback cb)
@@ -278,7 +290,6 @@ LteNetDevice::SetPromiscReceiveCallback (PromiscReceiveCallback cb)
   NS_LOG_FUNCTION (this);
   NS_LOG_WARN ("Promisc mode not supported");
 }
-
 
 
 void
@@ -291,12 +302,62 @@ LteNetDevice::Receive (Ptr<Packet> p)
   ipType = (ipType>>4) & 0x0f;
 
   if (ipType == 0x04)
-  m_rxCallback (this, p, Ipv4L3Protocol::PROT_NUMBER, Address ());
+    {
+      //
+      // Check if this device is configure as an OpenFlow switch port.
+      //
+      NS_LOG_INFO ("LteNetDevice: Received packet Uid " << p->GetUid() << " with size: " << p->GetSize() << ", serialized size: " << p->GetSerializedSize() );
+      NS_LOG_INFO ("Packet: " << p->ToString());
+      if (!m_openFlowRxCallback.IsNull ())
+        {
+          // We forward the original packet to the
+          // OpenFlow receive callback for the packetType we receive
+          // and we set the type to otherhost
+
+          // We need to deliver an Ethernet frame,
+          // to be processed adequately by the OpenFlow controller
+          Mac48Address from;
+          uint8_t macBuffer[6];
+          m_address.Copy48To (macBuffer);
+          from.CopyFrom (macBuffer);
+
+          if (p->GetSize () < 46)
+            {
+              uint8_t buffer[46];
+              memset (buffer, 0, 46);
+              Ptr<Packet> padd = Create<Packet> (buffer, 46 - p->GetSize ());
+              p->AddAtEnd (padd);
+            }
+
+          EthernetHeader ethHeader (false);
+          ethHeader.SetSource (from);
+          // ethHeader.SetDestination (Mac48Address("00:00:00:00:10:00"));
+          ethHeader.SetLengthType (Ipv4L3Protocol::PROT_NUMBER);
+          p->AddHeader (ethHeader);
+
+          EthernetTrailer trailer;
+          if (Node::ChecksumEnabled ())
+            {
+              trailer.EnableFcs (true);
+            }
+          trailer.CalcFcs (p);
+          p->AddTrailer (trailer);
+
+          NS_LOG_INFO ("LteNetDevice: Packet encapsulated into a DIX Ethernet frame");
+          NS_LOG_INFO ("Packet size: " << p->GetSize() << ", serialized size: " << p->GetSerializedSize());
+          NS_LOG_INFO ("Packet: " << p->ToString());
+          // The address specified does not  matter, it is not used for other than logging
+          // The packet is going to be handled according to predefined rules in the openflow switch
+          m_openFlowRxCallback (this, p, Ipv4L3Protocol::PROT_NUMBER, from, Mac48Address ("00:00:00:00:10:00"),
+                                NetDevice::PACKET_OTHERHOST);
+          return;
+        }
+        m_rxCallback (this, p, Ipv4L3Protocol::PROT_NUMBER, Address ());
+    }
   else if (ipType == 0x06)
     m_rxCallback (this, p, Ipv6L3Protocol::PROT_NUMBER, Address ());
   else
     NS_ABORT_MSG ("LteNetDevice::Receive - Unknown IP type...");
 }
-
 
 }

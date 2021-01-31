@@ -73,6 +73,8 @@ public:
 
 	void UpdateConfig (void);
 
+	// inherited from MmWaveNetDevice
+	virtual bool SendFrom (Ptr<Packet> packet, const Address& source, const Address& dest, uint16_t protocolNumber);
 
 	virtual bool DoSend (Ptr<Packet> packet, const Address& dest, uint16_t protocolNumber);
 

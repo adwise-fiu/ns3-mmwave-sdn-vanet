@@ -1,0 +1,27 @@
+# This is the controller node
+$node_(2) set X_ 200.0
+$node_(2) set Y_ 300.0
+$node_(2) set Z_ 1.0
+# This is the car with open flow switch
+$node_(3) set X_ 1300.0
+$node_(3) set Y_ 160.0
+$node_(3) set Z_ 1.5
+$ns_ at 3.0 "$node_(3) setdest 300.0 160.0 1.5 10.0"
+# This is the lte eNB
+$node_(4) set X_ 400.0
+$node_(4) set Y_ 200.0
+$node_(4) set Z_ 20.0
+# mmWave eNBs
+$node_(5) set X_ 200.0
+$node_(5) set Y_ 20.0
+$node_(5) set Z_ 20.0
+$node_(6) set X_ 900.0
+$node_(6) set Y_ 20.0
+$node_(6) set Z_ 20.0
+# additional mmWave node
+$node_(7) set X_ 1300.0
+$node_(7) set Y_ 160.0
+$node_(7) set Z_ 1.5
+$ns_ at 3.0 "$node_(7) setdest 300.0 160.0 1.5 10.0"
+
+

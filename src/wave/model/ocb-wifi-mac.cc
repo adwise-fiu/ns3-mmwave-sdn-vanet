@@ -156,6 +156,14 @@ OcbWifiMac::SetLinkDownCallback (Callback<void> linkDown)
 }
 
 void
+OcbWifiMac::Enqueue (Ptr<const Packet> packet, Mac48Address to, Mac48Address from)
+{
+  //Method written to adapt a 802.11p interface to OFSwitch13 application
+  //the from address is dropped here
+  Enqueue (packet, to);
+}
+
+void
 OcbWifiMac::Enqueue (Ptr<const Packet> packet, Mac48Address to)
 {
   NS_LOG_FUNCTION (this << packet << to);
@@ -225,10 +233,21 @@ OcbWifiMac::Enqueue (Ptr<const Packet> packet, Mac48Address to)
     {
       // Sanity check that the TID is valid
       NS_ASSERT (tid < 8);
+
+      NS_LOG_INFO ("OcbWifiMac: " << GetAddress() << ": Enqueued QoS packet with size: " << packet->GetSize() << ", serialized size: " <<
+                   packet->GetSerializedSize() << ", from: " << hdr.GetAddr2() << ", to: " << hdr.GetAddr1());
+      NS_LOG_INFO ("  Packet: " << packet->ToString());
+      NS_LOG_INFO ("  Header with serialized size: " << hdr.GetSerializedSize());
+
       m_edca[QosUtilsMapTidToAc (tid)]->Queue (packet, hdr);
     }
   else
     {
+      NS_LOG_INFO ("OcbWifiMac: " << GetAddress() << ": Enqueued non-QoS packet with size: " << packet->GetSize() << ", serialized size: " <<
+                   packet->GetSerializedSize() << ", from: " << hdr.GetAddr2() << ", to: " << hdr.GetAddr1());
+      NS_LOG_INFO ("  Packet: " << packet->ToString());
+      NS_LOG_INFO ("  Header with serialized size: " << hdr.GetSerializedSize());
+
       m_txop->Queue (packet, hdr);
     }
 }
@@ -273,6 +292,10 @@ OcbWifiMac::Receive (Ptr<Packet> packet, const WifiMacHeader *hdr)
         }
       else
         {
+          NS_LOG_INFO ("OcbWifiMac: " << GetAddress() << ": Received data frame with size: " << packet->GetSize() << ", serialized size: " <<
+                       packet->GetSerializedSize() << ", from: " << from << ", to: " << to);
+          NS_LOG_INFO ("  Frame: " << packet->ToString());
+
           ForwardUp (packet, from, to);
         }
       return;

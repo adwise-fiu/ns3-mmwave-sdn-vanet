@@ -64,6 +64,13 @@ public:
    */
   void CopyTo (uint8_t buffer[8]) const;
   /**
+   * \param buffer address in network order
+   *
+   * Copy the 3 LSB plus 3 fixed MSB from internal address to the input buffer
+   * to be used as a Mac48Address
+   */
+  void Copy48To (uint8_t buffer[6]) const;
+  /**
    * \returns a new Address instance
    *
    * Convert an instance of this class to a polymorphic Address instance.
@@ -72,7 +79,7 @@ public:
   /**
    * \param address a polymorphic address
    * \returns a new Mac64Address from the polymorphic address
-   * 
+   *
    * This function performs a type check and asserts if the
    * type of the input address is not compatible with an
    * Mac64Address.
@@ -85,7 +92,7 @@ public:
   static bool IsMatchingType (const Address &address);
   /**
    * Allocate a new Mac64Address.
-   * \returns newly allocated mac64Address   
+   * \returns newly allocated mac64Address
    */
   static Mac64Address Allocate (void);
 private:

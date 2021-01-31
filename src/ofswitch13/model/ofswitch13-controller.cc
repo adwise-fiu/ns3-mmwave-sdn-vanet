@@ -182,7 +182,7 @@ OFSwitch13Controller::GetNextXid ()
 void
 OFSwitch13Controller::HandshakeSuccessful (Ptr<const RemoteSwitch> swtch)
 {
-  NS_LOG_FUNCTION (this << swtch);
+  NS_LOG_FUNCTION (this << swtch << Simulator::Now());
 }
 
 Ptr<const OFSwitch13Controller::RemoteSwitch>
@@ -205,7 +205,7 @@ int
 OFSwitch13Controller::SendToSwitch (Ptr<const RemoteSwitch> swtch,
                                     struct ofl_msg_header *msg, uint32_t xid)
 {
-  NS_LOG_FUNCTION (this << swtch);
+  NS_LOG_FUNCTION (this << swtch << Simulator::Now());
 
   char *msgStr = ofl_msg_to_string (msg, 0);
   NS_LOG_DEBUG ("TX to switch " << swtch->GetIpv4 () <<
@@ -572,7 +572,7 @@ OFSwitch13Controller::HandleSwitchMsg (
 void
 OFSwitch13Controller::ReceiveFromSwitch (Ptr<Packet> packet, Address from)
 {
-  NS_LOG_FUNCTION (this << packet);
+  NS_LOG_FUNCTION (this << packet << Simulator::Now());
 
   uint32_t xid;
   struct ofl_msg_header *msg;
@@ -623,7 +623,7 @@ OFSwitch13Controller::GetRemoteSwitch (Address address)
 bool
 OFSwitch13Controller::SocketRequest (Ptr<Socket> socket, const Address& from)
 {
-  NS_LOG_FUNCTION (this << socket << from);
+  NS_LOG_FUNCTION (this << socket << from << Simulator::Now());
 
   NS_ASSERT_MSG (InetSocketAddress::IsMatchingType (from),
                  "Invalid address type (only IPv4 supported by now).");
@@ -637,7 +637,7 @@ OFSwitch13Controller::SocketRequest (Ptr<Socket> socket, const Address& from)
 void
 OFSwitch13Controller::SocketAccept (Ptr<Socket> socket, const Address& from)
 {
-  NS_LOG_FUNCTION (this << socket << from);
+  NS_LOG_FUNCTION (this << socket << from << Simulator::Now());
 
   Ipv4Address ipAddr = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
   uint16_t port = InetSocketAddress::ConvertFrom (from).GetPort ();

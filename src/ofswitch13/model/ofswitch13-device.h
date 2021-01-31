@@ -29,6 +29,7 @@
 #include <ns3/traced-value.h>
 #include "ofswitch13-interface.h"
 #include "ofswitch13-socket-handler.h"
+#include "ns3/vector.h"
 
 namespace ns3 {
 
@@ -354,6 +355,10 @@ public:
    */
   typedef void (*DeviceTracedCallback)(Ptr<const OFSwitch13Device> dev);
 
+  void SetNode (Ptr<Node>);
+  Ptr<Node> GetNode ();
+  void AddmmWaveEnbLocation (Vector location);
+
 protected:
   // Inherited from Object
   virtual void DoDispose (void);
@@ -648,6 +653,10 @@ private:
   uint64_t          m_cMeterMod;    //!< Pipeline meter mod counter.
   uint64_t          m_cPacketIn;    //!< Pipeline packet in counter.
   uint64_t          m_cPacketOut;   //!< Pipeline packet out counter.
+  Ptr<Node>         m_node;
+  std::vector<Vector> m_mmWaveEnbLocations;
+  bool              m_5gCoverage;
+  bool              m_firstLocationFetch;
 
   static uint64_t   m_globalDpId;   //!< Global counter for datapath IDs.
   static uint64_t   m_globalPktId;  //!< Global counter for packets IDs.

@@ -21,7 +21,7 @@ cd src/ofswitch13/lib/ofsoftswitch13
 make
 ```
 
-Once  everything  gets  compiled,   the  static  library `libns3ofswitch13.a` file  will  be  available  under  the `ofswitch13/lib/ofsoftswitch13/udatapath` directory
+Once  everything  gets  compiled,   the  static  library `libns3ofswitch13.a` file  will  be  available  under  the `ofswitch13/lib/ofsoftswitch13/udatapath` directory.
 
 ## mmWave ns-3 Module v2.0
 
@@ -46,7 +46,8 @@ Please, visit the [OFSwitch13 project homepage][project] for detailed informatio
 
 ## Ns-2 Mobility Helper with 3D Mobility
 
-The  *Ns2MobilityHelper* was expanded to allow 3D mobility traces from this [repository][ns2mobility].
+The  *Ns2MobilityHelper* was expanded to allow 3D mobility traces from [this][ns2mobility] repository.
+
 
 ## License ##
 

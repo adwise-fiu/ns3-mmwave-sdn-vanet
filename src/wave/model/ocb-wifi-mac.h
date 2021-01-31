@@ -119,6 +119,16 @@ public:
   /**
    * \param packet the packet to send.
    * \param to the address to which the packet should be sent.
+   * \param from the address the packet is coming fromm.
+   *
+   * The packet should be enqueued in a tx queue, and should be
+   * dequeued as soon as the channel access function determines that
+   * access is granted to this MAC.
+   */
+  virtual void Enqueue (Ptr<const Packet> packet, Mac48Address to, Mac48Address from);
+  /**
+   * \param packet the packet to send.
+   * \param to the address to which the packet should be sent.
    *
    * The packet should be enqueued in a tx queue, and should be
    * dequeued as soon as the channel access function determines that

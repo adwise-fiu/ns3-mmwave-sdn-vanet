@@ -30,6 +30,9 @@
 #include "regular-wifi-mac.h"
 #include "wifi-mac-queue.h"
 
+#include "ns3/ethernet-header.h"
+#include "ns3/ethernet-trailer.h"
+
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("WifiNetDevice");
@@ -351,6 +354,10 @@ WifiNetDevice::Send (Ptr<Packet> packet, const Address& dest, uint16_t protocolN
   llc.SetType (protocolNumber);
   packet->AddHeader (llc);
 
+  NS_LOG_INFO ("WifiNetDevice: " << m_mac->GetAddress () << ": Enqueued packet with size: " << packet->GetSize() << ", serialized size: " << packet->GetSerializedSize()
+               << ", to: " << dest);
+  NS_LOG_INFO ("  Packet: " << packet->ToString());
+
   m_mac->NotifyTx (packet);
   m_mac->Enqueue (packet, realTo);
   return true;
@@ -376,6 +383,13 @@ WifiNetDevice::NeedsArp (void) const
 }
 
 void
+WifiNetDevice::SetOpenFlowReceiveCallback (NetDevice::PromiscReceiveCallback cb)
+{
+  NS_LOG_FUNCTION (&cb);
+  m_openFlowRxCallback = cb;
+}
+
+void
 WifiNetDevice::SetReceiveCallback (NetDevice::ReceiveCallback cb)
 {
   m_forwardUp = cb;
@@ -385,6 +399,11 @@ void
 WifiNetDevice::ForwardUp (Ptr<Packet> packet, Mac48Address from, Mac48Address to)
 {
   NS_LOG_FUNCTION (this << packet << from << to);
+
+  NS_LOG_INFO ("WifiNetDevice: " << m_mac->GetAddress () << ": Received packet with size: " << packet->GetSize() << ", serialized size: " <<
+               packet->GetSerializedSize() << ", from device address: " << from << ", to: " << to);
+  NS_LOG_INFO ("  Packet: " << packet->ToString());
+
   LlcSnapHeader llc;
   NetDevice::PacketType type;
   if (to.IsBroadcast ())
@@ -404,10 +423,54 @@ WifiNetDevice::ForwardUp (Ptr<Packet> packet, Mac48Address from, Mac48Address to
       type = NetDevice::PACKET_OTHERHOST;
     }
 
+  //
+  // Check if this device is configure as an OpenFlow switch port.
+  //
+  if (!m_openFlowRxCallback.IsNull ())
+    {
+      // We forward the original packet to the
+      // OpenFlow receive callback for all kinds of packetType we receive
+      // (broadcast, multicast, host or other host).
+      packet->RemoveHeader (llc);
+
+      // We need to deliver an Ethernet frame,
+      // need to have DIX encapsulation
+      if (packet->GetSize () < 46)
+        {
+          uint8_t buffer[46];
+          memset (buffer, 0, 46);
+          Ptr<Packet> padd = Create<Packet> (buffer, 46 - packet->GetSize ());
+          packet->AddAtEnd (padd);
+        }
+
+      EthernetHeader ethHeader (false);
+      ethHeader.SetSource (from);
+      ethHeader.SetDestination (to);
+      ethHeader.SetLengthType (llc.GetType ());
+      packet->AddHeader (ethHeader);
+
+      EthernetTrailer trailer;
+      if (Node::ChecksumEnabled ())
+        {
+          trailer.EnableFcs (true);
+        }
+      trailer.CalcFcs (packet);
+      packet->AddTrailer (trailer);
+
+      NS_LOG_INFO ("WifiNetDevice: " << m_mac->GetAddress () << ": Packet DIX-encapsulated into an Ethernet frame");
+      NS_LOG_INFO ("  Packet size: " << packet->GetSize() << ", serialized size: " << packet->GetSerializedSize());
+      NS_LOG_INFO ("  Packet: " << packet->ToString());
+      m_openFlowRxCallback (this, packet, llc.GetType (), from, to, type);
+      return;
+    }
+
   if (type != NetDevice::PACKET_OTHERHOST)
     {
       m_mac->NotifyRx (packet);
       packet->RemoveHeader (llc);
+      NS_LOG_INFO ("WifiNetDevice: " << m_mac->GetAddress () << ": After removing llc header with serialized size: " << llc.GetSerializedSize());
+      NS_LOG_INFO ("  Packet size: " << packet->GetSize() << ", serialized size: " << packet->GetSerializedSize());
+      NS_LOG_INFO ("  Packet: " << packet->ToString());
       m_forwardUp (this, packet, llc.GetType (), from);
     }
   else
@@ -449,6 +512,10 @@ WifiNetDevice::SendFrom (Ptr<Packet> packet, const Address& source, const Addres
   LlcSnapHeader llc;
   llc.SetType (protocolNumber);
   packet->AddHeader (llc);
+
+  NS_LOG_INFO ("WifiNetDevice: " << m_mac->GetAddress () << ": Enqueued packet with size: " << packet->GetSize() << ", serialized size: " << packet->GetSerializedSize()
+               << ", from: " << source << ", to: " << dest);
+  NS_LOG_INFO ("  Packet: " << packet->ToString());
 
   m_mac->NotifyTx (packet);
   m_mac->Enqueue (packet, realTo, realFrom);

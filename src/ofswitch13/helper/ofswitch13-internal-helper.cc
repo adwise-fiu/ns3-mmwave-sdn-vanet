@@ -217,5 +217,23 @@ OFSwitch13InternalHelper::Connect (Ptr<Node> ctrl, Ptr<Node> swtch)
     }
 }
 
+NetDeviceContainer
+OFSwitch13InternalHelper::GetCtlDevs()
+{
+  return m_controlDevs;
+}
+
+ApplicationContainer
+OFSwitch13InternalHelper::GetCtlApps()
+{
+  return m_controlApps;
+}
+
+OFSwitch13DeviceContainer
+OFSwitch13InternalHelper::GetOFDevs()
+{
+  return m_openFlowDevs;
+}
+
 } // namespace ns3
 #endif // NS3_OFSWITCH13

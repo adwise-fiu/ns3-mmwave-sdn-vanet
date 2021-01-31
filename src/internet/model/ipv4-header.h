@@ -41,6 +41,7 @@ public:
    * \brief Enable checksum calculation for this header.
    */
   void EnableChecksum (void);
+  bool IsChecksumEnabled (void);
   /**
    * \param size the size of the payload in bytes
    */

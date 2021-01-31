@@ -52,6 +52,12 @@ Ipv4Header::EnableChecksum (void)
   m_calcChecksum = true;
 }
 
+bool
+Ipv4Header::IsChecksumEnabled (void)
+{
+  return m_calcChecksum;
+}
+
 void
 Ipv4Header::SetPayloadSize (uint16_t size)
 {

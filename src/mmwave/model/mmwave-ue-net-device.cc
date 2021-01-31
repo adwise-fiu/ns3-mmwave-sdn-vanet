@@ -46,12 +46,15 @@
 #include "mmwave-ue-net-device.h"
 #include <ns3/ipv4-header.h>
 #include <ns3/ipv4.h>
+#include <ns3/udp-header.h>
 #include "mmwave-ue-phy.h"
 #include <ns3/ipv4-l3-protocol.h>
 #include <ns3/log.h>
 #include <ns3/lte-ue-component-carrier-manager.h>
 #include <ns3/object-map.h>
 
+#undef NS_LOG_APPEND_CONTEXT
+#define NS_LOG_APPEND_CONTEXT std::clog << "[mac=" << GetAddress() << "] "
 
 namespace ns3{
 
@@ -65,48 +68,48 @@ NS_OBJECT_ENSURE_REGISTERED (MmWaveUeNetDevice);
 TypeId
 MmWaveUeNetDevice::GetTypeId (void)
 {
-	static TypeId
-	    tid =
-	    TypeId ("ns3::MmWaveUeNetDevice")
-	    .SetParent<MmWaveNetDevice> ()
-	    .AddConstructor<MmWaveUeNetDevice> ()
-		.AddAttribute ("EpcUeNas",
-                   "The NAS associated to this UeNetDevice",
-                   PointerValue (),
-                   MakePointerAccessor (&MmWaveUeNetDevice::m_nas),
-                   MakePointerChecker <EpcUeNas> ())
-		.AddAttribute ("mmWaveUeRrc",
-                   "The RRC associated to this UeNetDevice",
-                   PointerValue (),
-                   MakePointerAccessor (&MmWaveUeNetDevice::m_rrc),
-                   MakePointerChecker <LteUeRrc> ())
-		 .AddAttribute ("LteUeComponentCarrierManager",
-	                  "The ComponentCarrierManager associated to this UeNetDevice",
-	                  PointerValue (),
-	                  MakePointerAccessor (&MmWaveUeNetDevice::m_componentCarrierManager),
-	                  MakePointerChecker <LteUeComponentCarrierManager> ())
-	   .AddAttribute ("ComponentCarrierMapUe", "List of all component Carrier.",
-	                  ObjectMapValue (),
-	                  MakeObjectMapAccessor (&MmWaveUeNetDevice::m_ccMap),
-	                  MakeObjectMapChecker<MmWaveComponentCarrierUe> ())
-		.AddAttribute ("Imsi",
-									 "International Mobile Subscriber Identity assigned to this UE",
-									 UintegerValue (0),
-									 MakeUintegerAccessor (&MmWaveUeNetDevice::m_imsi),
-									 MakeUintegerChecker<uint64_t> ())
-		.AddAttribute ("AntennaNum",
-								   "Antenna number of the device",
-								   UintegerValue (16),
-								   MakeUintegerAccessor (&MmWaveUeNetDevice::SetAntennaNum,
-														 &MmWaveUeNetDevice::GetAntennaNum),
-								   MakeUintegerChecker<uint8_t> ())
-		.AddAttribute ("LteUeRrc",
-										"The RRC layer associated with the ENB",
-										PointerValue (),
-										MakePointerAccessor (&MmWaveUeNetDevice::m_rrc),
-										MakePointerChecker <LteUeRrc> ())
-	;
-	return tid;
+  static TypeId
+  tid =
+  TypeId ("ns3::MmWaveUeNetDevice")
+  .SetParent<MmWaveNetDevice> ()
+  .AddConstructor<MmWaveUeNetDevice> ()
+  .AddAttribute ("EpcUeNas",
+                 "The NAS associated to this UeNetDevice",
+                  PointerValue (),
+                  MakePointerAccessor (&MmWaveUeNetDevice::m_nas),
+                  MakePointerChecker <EpcUeNas> ())
+  .AddAttribute ("mmWaveUeRrc",
+                 "The RRC associated to this UeNetDevice",
+                  PointerValue (),
+                  MakePointerAccessor (&MmWaveUeNetDevice::m_rrc),
+                  MakePointerChecker <LteUeRrc> ())
+  .AddAttribute ("LteUeComponentCarrierManager",
+                 "The ComponentCarrierManager associated to this UeNetDevice",
+                  PointerValue (),
+                  MakePointerAccessor (&MmWaveUeNetDevice::m_componentCarrierManager),
+                  MakePointerChecker <LteUeComponentCarrierManager> ())
+  .AddAttribute ("ComponentCarrierMapUe", "List of all component Carrier.",
+                  ObjectMapValue (),
+                  MakeObjectMapAccessor (&MmWaveUeNetDevice::m_ccMap),
+                  MakeObjectMapChecker<MmWaveComponentCarrierUe> ())
+  .AddAttribute ("Imsi",
+                 "International Mobile Subscriber Identity assigned to this UE",
+                  UintegerValue (0),
+                  MakeUintegerAccessor (&MmWaveUeNetDevice::m_imsi),
+                  MakeUintegerChecker<uint64_t> ())
+  .AddAttribute ("AntennaNum",
+                 "Antenna number of the device",
+                  UintegerValue (16),
+                  MakeUintegerAccessor (&MmWaveUeNetDevice::SetAntennaNum,
+                                        &MmWaveUeNetDevice::GetAntennaNum),
+                  MakeUintegerChecker<uint8_t> ())
+  .AddAttribute ("LteUeRrc",
+                 "The RRC layer associated with the ENB",
+                  PointerValue (),
+                  MakePointerAccessor (&MmWaveUeNetDevice::m_rrc),
+                  MakePointerChecker <LteUeRrc> ())
+  ;
+  return tid;
 }
 
 MmWaveUeNetDevice::MmWaveUeNetDevice (void)
@@ -194,16 +197,50 @@ MmWaveUeNetDevice::UpdateConfig (void)
 }
 
 bool
+MmWaveUeNetDevice::SendFrom (Ptr<Packet> packet, const Address& source, const Address& dest, uint16_t protocolNumber)
+{
+  // Method implemented for integration of this Lte Net Device as a port interface for the OFSwtich13 application
+  // We set the source address of the packet to this net device's ip address
+  NS_LOG_FUNCTION (this << source << dest << protocolNumber);
+  int32_t IpIfaceIndex = GetNode()->GetObject<Ipv4>()->GetInterfaceForDevice (this);
+  Ipv4Address ifaceIpv4 = GetNode()->GetObject<Ipv4>()->GetAddress(IpIfaceIndex, 0).GetLocal();
+  Ipv4Header ipv4Hdr;
+  packet->RemoveHeader (ipv4Hdr);
+  ipv4Hdr.SetSource (ifaceIpv4);
+
+  if (Node::ChecksumEnabled ())
+  {
+    ipv4Hdr.EnableChecksum ();
+    UdpHeader udpHdr;
+    udpHdr.EnableChecksums ();
+    packet->RemoveHeader (udpHdr);
+    udpHdr.ForceChecksum (0);
+    udpHdr.InitializeChecksum (ifaceIpv4, ipv4Hdr.GetDestination (), ipv4Hdr.GetProtocol ());
+    packet->AddHeader (udpHdr);
+  }
+
+  packet->AddHeader (ipv4Hdr);
+
+  return DoSend (packet, dest, protocolNumber);
+}
+
+bool
 MmWaveUeNetDevice::DoSend (Ptr<Packet> packet, const Address& dest, uint16_t protocolNumber)
 {
-	NS_LOG_FUNCTION (this << dest << protocolNumber);
-    if (protocolNumber != Ipv4L3Protocol::PROT_NUMBER)
-	{
-	  NS_LOG_INFO("unsupported protocol " << protocolNumber << ", only IPv4 is supported");
-	  return false;
-	}
+  NS_LOG_FUNCTION (this << dest << protocolNumber);
+  if (protocolNumber != Ipv4L3Protocol::PROT_NUMBER)
+    {
+      NS_LOG_INFO("unsupported protocol " << protocolNumber << ", only IPv4 is supported");
+      return false;
+    }
+  Ipv4Header hdr;
+  packet->PeekHeader (hdr);
 
-    return m_nas->Send (packet);
+  NS_LOG_INFO ("MmWaveUeNetDevice: Sending packet Uid " << packet-> GetUid () << " with size: " << packet->GetSize() << ", serialized size: " << packet->GetSerializedSize() <<
+                ", to: " << dest << ", ip src: " <<  hdr.GetSource() << ", ip dst: " <<  hdr.GetDestination ());
+  NS_LOG_INFO ("Packet: " << packet->ToString());
+
+  return m_nas->Send (packet);
 }
 
 Ptr<MmWaveUePhy>

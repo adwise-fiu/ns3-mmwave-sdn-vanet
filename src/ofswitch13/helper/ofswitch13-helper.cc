@@ -229,6 +229,9 @@ OFSwitch13Helper::InstallSwitch (Ptr<Node> swNode)
 
   // Create and aggregate the OpenFlow device to the switch node.
   Ptr<OFSwitch13Device> openFlowDev = m_devFactory.Create<OFSwitch13Device> ();
+  openFlowDev->SetNode (swNode);
+  openFlowDev->AddmmWaveEnbLocation (Vector (200, 20, 20));
+  openFlowDev->AddmmWaveEnbLocation (Vector (900, 20, 20));
   swNode->AggregateObject (openFlowDev);
   m_openFlowDevs.Add (openFlowDev);
   m_switchNodes.Add (swNode);

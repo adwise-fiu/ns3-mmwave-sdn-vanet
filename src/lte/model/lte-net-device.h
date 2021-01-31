@@ -80,6 +80,13 @@ public:
   virtual void SetReceiveCallback (NetDevice::ReceiveCallback cb);
   virtual Address GetMulticast (Ipv4Address addr) const;
   virtual Address GetMulticast (Ipv6Address addr) const;
+  /**
+   * Set the callback used to notify the OpenFlow when a packet has been
+   * received by this device.
+   *
+   * \param cb The callback.
+   */
+  virtual void SetOpenFlowReceiveCallback (NetDevice::PromiscReceiveCallback cb);
   virtual void SetPromiscReceiveCallback (PromiscReceiveCallback cb);
   virtual bool SendFrom (Ptr<Packet> packet, const Address& source, const Address& dest, uint16_t protocolNumber);
   virtual bool SupportsSendFrom (void) const;
@@ -92,7 +99,10 @@ public:
   void Receive (Ptr<Packet> p);
 
 protected:
-
+  /**
+   * The OpenFlow receive callback.
+   */
+  NetDevice::PromiscReceiveCallback m_openFlowRxCallback;
   NetDevice::ReceiveCallback m_rxCallback; ///< receive callback
 
 private:

@@ -107,6 +107,13 @@ public:
   Ptr<Node> GetNode (void) const;
   void SetNode (const Ptr<Node> node);
   bool NeedsArp (void) const;
+  /**
+   * Set the callback used to notify the OpenFlow when a packet has been
+   * received by this device.
+   *
+   * \param cb The callback.
+   */
+  virtual void SetOpenFlowReceiveCallback (NetDevice::PromiscReceiveCallback cb);
   void SetReceiveCallback (NetDevice::ReceiveCallback cb);
   Address GetMulticast (Ipv6Address addr) const;
   bool SendFrom (Ptr<Packet> packet, const Address& source, const Address& dest, uint16_t protocolNumber);
@@ -215,6 +222,10 @@ private:
   Ptr<WifiMac> m_mac; //!< the MAC
   Ptr<WifiRemoteStationManager> m_stationManager; //!< the station manager
   Ptr<NetDeviceQueueInterface> m_queueInterface;   //!< NetDevice queue interface
+  /**
+   * The OpenFlow receive callback.
+   */
+  NetDevice::PromiscReceiveCallback m_openFlowRxCallback;
   NetDevice::ReceiveCallback m_forwardUp; //!< forward up callback
   NetDevice::PromiscReceiveCallback m_promiscRx; //!< promiscious receive callback
 

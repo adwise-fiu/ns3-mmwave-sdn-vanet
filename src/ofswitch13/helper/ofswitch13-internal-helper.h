@@ -67,6 +67,25 @@ public:
     Ptr<Node> cNode, Ptr<OFSwitch13Controller> controller =
       CreateObject<OFSwitch13LearningController> ());
 
+  /**
+   * Returns the controller devices.
+   * \return The NetDeviceContainer of controller devices.
+   */
+  NetDeviceContainer GetCtlDevs (void);
+
+  /**
+   * Returns the controller applications.
+   * \return The ApplicationContainer of all controller apps.
+   */
+  ApplicationContainer GetCtlApps (void);
+
+  /**
+   * Returns the Open Flow Devices.
+   * \return The OFSwitch13DeviceContainer of all open flow devices.
+   */
+  OFSwitch13DeviceContainer GetOFDevs (void);
+
+
 protected:
   /** Destructor implementation. */
   virtual void DoDispose ();
@@ -88,4 +107,3 @@ private:
 
 } // namespace ns3
 #endif /* OFSWITCH13_INTERNAL_HELPER_H */
-

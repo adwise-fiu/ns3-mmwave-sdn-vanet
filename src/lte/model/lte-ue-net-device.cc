@@ -40,6 +40,7 @@
 #include "lte-ue-rrc.h"
 #include "ns3/ipv4-header.h"
 #include "ns3/ipv6-header.h"
+#include "ns3/udp-header.h"
 #include "ns3/ipv4.h"
 #include "ns3/ipv6.h"
 #include "lte-amc.h"
@@ -52,6 +53,9 @@
 #include <ns3/lte-ue-component-carrier-manager.h>
 #include <ns3/object-map.h>
 #include <ns3/object-factory.h>
+
+#undef NS_LOG_APPEND_CONTEXT
+#define NS_LOG_APPEND_CONTEXT std::clog << "[mac=" << GetAddress() << "] "
 
 namespace ns3 {
 
@@ -284,6 +288,34 @@ LteUeNetDevice::DoInitialize (void)
 }
 
 bool
+LteUeNetDevice::SendFrom (Ptr<Packet> packet, const Address& source, const Address& dest, uint16_t protocolNumber)
+{
+  // Method implemented for integration of this Lte Net Device as a port interface for the OFSwtich13 application
+  // We set the source address of the packet to this net device's ip address
+  NS_LOG_FUNCTION (this << source << dest << protocolNumber);
+  int32_t IpIfaceIndex = GetNode()->GetObject<Ipv4>()->GetInterfaceForDevice (this);
+  Ipv4Address ifaceIpv4 = GetNode()->GetObject<Ipv4>()->GetAddress(IpIfaceIndex, 0).GetLocal();
+  Ipv4Header ipv4Hdr;
+  packet->RemoveHeader (ipv4Hdr);
+  ipv4Hdr.SetSource (ifaceIpv4);
+
+  if (Node::ChecksumEnabled ())
+  {
+    ipv4Hdr.EnableChecksum ();
+    UdpHeader udpHdr;
+    udpHdr.EnableChecksums ();
+    packet->RemoveHeader (udpHdr);
+    udpHdr.ForceChecksum (0);
+    udpHdr.InitializeChecksum (ifaceIpv4, ipv4Hdr.GetDestination (), ipv4Hdr.GetProtocol ());
+    packet->AddHeader (udpHdr);
+  }
+
+  packet->AddHeader (ipv4Hdr);
+
+  return Send (packet, dest, protocolNumber);
+}
+
+bool
 LteUeNetDevice::Send (Ptr<Packet> packet, const Address& dest, uint16_t protocolNumber)
 {
   NS_LOG_FUNCTION (this << dest << protocolNumber);
@@ -292,8 +324,15 @@ LteUeNetDevice::Send (Ptr<Packet> packet, const Address& dest, uint16_t protocol
       NS_LOG_INFO ("unsupported protocol " << protocolNumber << ", only IPv4 and IPv6 are supported");
       return true;
     }
+
+  Ipv4Header hdr;
+  packet->PeekHeader (hdr);
+
+  NS_LOG_INFO ("LteUeNetDevice: Sending packet Uid " << packet-> GetUid () << " with size: " << packet->GetSize() << ", serialized size: " << packet->GetSerializedSize() <<
+                ", to: " << dest << ", ip src: " <<  hdr.GetSource() << ", ip dst: " <<  hdr.GetDestination ());
+  NS_LOG_INFO ("Packet: " << packet->ToString());
+
   return m_nas->Send (packet);
 }
-
 
 } // namespace ns3

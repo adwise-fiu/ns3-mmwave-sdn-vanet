@@ -1,0 +1,11 @@
+# This is the mobile node with mmWave interface
+$node_(2) set X_ 1800.0
+$node_(2) set Y_ 160.0
+$node_(2) set Z_ 1.5
+$ns_ at 3.0 "$node_(2) setdest 300.0 160.0 1.5 10.0"
+# mmWave eNB
+$node_(3) set X_ 900.0
+$node_(3) set Y_ 20.0
+$node_(3) set Z_ 20.0
+
+

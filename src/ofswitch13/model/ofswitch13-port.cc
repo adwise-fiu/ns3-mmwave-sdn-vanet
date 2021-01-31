@@ -23,6 +23,10 @@
 #include <ns3/pointer.h>
 #include <ns3/csma-net-device.h>
 #include <ns3/virtual-net-device.h>
+#include <ns3/wifi-net-device.h>
+#include <ns3/lte-ue-net-device.h>
+#include <ns3/mmwave-ue-net-device.h>
+#include <ns3/mc-ue-net-device.h>
 #include "ofswitch13-device.h"
 #include "ofswitch13-port.h"
 #include "tunnel-id-tag.h"
@@ -33,6 +37,8 @@
   std::clog << "[dp " << m_dpId << " port " << m_portNo << "] ";
 
 namespace ns3 {
+
+using namespace mmwave;
 
 NS_LOG_COMPONENT_DEFINE ("OFSwitch13Port");
 NS_OBJECT_ENSURE_REGISTERED (OFSwitch13Port);
@@ -136,8 +142,13 @@ OFSwitch13Port::NotifyConstructionCompleted ()
   // Check for valid NetDevice type
   Ptr<CsmaNetDevice> csmaDev = m_netDev->GetObject<CsmaNetDevice> ();
   Ptr<VirtualNetDevice> virtDev = m_netDev->GetObject<VirtualNetDevice> ();
-  NS_ABORT_MSG_IF (!csmaDev && !virtDev,
-                   "NetDevice must be CsmaNetDevice or VirtualNetDevice.");
+  Ptr<WifiNetDevice> wifiDev = m_netDev->GetObject<WifiNetDevice> ();
+  Ptr<LteUeNetDevice> lteDev = m_netDev->GetObject<LteUeNetDevice> ();
+  Ptr<MmWaveUeNetDevice> mmWaveUeDev = m_netDev->GetObject<MmWaveUeNetDevice> ();
+  Ptr<McUeNetDevice> mcUeDev = m_netDev->GetObject<McUeNetDevice> ();
+
+  // NS_ABORT_MSG_IF (!csmaDev && !virtDev,
+  //                  "NetDevice must be CsmaNetDevice or VirtualNetDevice.");
 
   // Filling ofsoftswitch13 internal structures for this port.
   size_t oflPortSize = sizeof (struct ofl_port);
@@ -148,7 +159,16 @@ OFSwitch13Port::NotifyConstructionCompleted ()
   m_swPort->conf->port_no = m_portNo;
   m_swPort->conf->name = (char*)xmalloc (OFP_MAX_PORT_NAME_LEN);
   snprintf (m_swPort->conf->name, OFP_MAX_PORT_NAME_LEN, "Port %d", m_portNo);
-  m_netDev->GetAddress ().CopyTo (m_swPort->conf->hw_addr);
+  if (lteDev)
+    {
+      //In this implementation Lte supports Ipv6, therefore it uses 64-bit Mac Addresses
+      Mac64Address lteMac = Mac64Address::ConvertFrom (lteDev->GetAddress ());
+      lteMac.Copy48To (m_swPort->conf->hw_addr);
+    }
+  else
+    {
+      m_netDev->GetAddress ().CopyTo (m_swPort->conf->hw_addr);
+    }
   m_swPort->conf->config = 0x00000000;
   m_swPort->conf->state = 0x00000000 | OFPPS_LIVE;
   m_swPort->conf->curr = GetPortFeatures ();
@@ -199,6 +219,26 @@ OFSwitch13Port::NotifyConstructionCompleted ()
       csmaDev->SetOpenFlowReceiveCallback (
         MakeCallback (&OFSwitch13Port::Receive, this));
     }
+  else if (wifiDev)
+    {
+      wifiDev->SetOpenFlowReceiveCallback (
+        MakeCallback (&OFSwitch13Port::Receive, this));
+    }
+  else if (lteDev)
+    {
+      lteDev->SetOpenFlowReceiveCallback (
+        MakeCallback (&OFSwitch13Port::Receive, this));
+    }
+  else if (mmWaveUeDev)
+    {
+      mmWaveUeDev->SetOpenFlowReceiveCallback (
+        MakeCallback (&OFSwitch13Port::Receive, this));
+    }
+  else if (mcUeDev)
+    {
+      mcUeDev->SetOpenFlowReceiveCallback (
+        MakeCallback (&OFSwitch13Port::Receive, this));
+    }
   else
     {
       NS_ASSERT (virtDev);
@@ -247,6 +287,36 @@ OFSwitch13Port::PortUpdateState ()
 
   if (orig_state != m_swPort->conf->state)
     {
+      NS_LOG_INFO ("Previous state: " << orig_state << ", current state: " << m_swPort->conf->state);
+      NS_LOG_INFO ("Port status has changed. Notifying the controller.");
+      struct ofl_msg_port_status msg;
+      msg.header.type = OFPT_PORT_STATUS;
+      msg.reason = OFPPR_MODIFY;
+      msg.desc = m_swPort->conf;
+      dp_send_message (m_swPort->dp, (struct ofl_msg_header*)&msg, 0);
+      return true;
+    }
+  return false;
+}
+
+bool
+OFSwitch13Port::PortUpdateState (bool in5gRange)
+{
+  uint32_t orig_state = m_swPort->conf->state;
+//  if (m_netDev->IsLinkUp () && in5gRange)
+  if (in5gRange)
+    {
+      m_swPort->conf->state &= ~OFPPS_LINK_DOWN;
+    }
+  else
+    {
+      m_swPort->conf->state |= OFPPS_LINK_DOWN;
+    }
+  dp_port_live_update (m_swPort);
+
+  if (orig_state != m_swPort->conf->state)
+    {
+      NS_LOG_INFO ("Previous state: " << orig_state << ", current state: " << m_swPort->conf->state);
       NS_LOG_INFO ("Port status has changed. Notifying the controller.");
       struct ofl_msg_port_status msg;
       msg.header.type = OFPT_PORT_STATUS;
@@ -320,7 +390,7 @@ OFSwitch13Port::Receive (Ptr<NetDevice> device, Ptr<const Packet> packet,
                          uint16_t protocol, const Address &from,
                          const Address &to, NetDevice::PacketType packetType)
 {
-  NS_LOG_FUNCTION (this << packet);
+  NS_LOG_FUNCTION (this << packet << Simulator::Now ());
 
   // Check port configuration.
   if ((m_swPort->conf->config & (OFPPC_NO_RECV | OFPPC_PORT_DOWN)) != 0)
@@ -336,6 +406,15 @@ OFSwitch13Port::Receive (Ptr<NetDevice> device, Ptr<const Packet> packet,
   // Fire RX trace source
   m_rxTrace (packet);
   NS_LOG_DEBUG ("Pkt " << packet->GetUid () << " received at this port.");
+
+  // packet->EnablePrinting();
+  // packet->Print(std::cout);
+
+  NS_LOG_INFO ("Time: " << Simulator::Now ());
+  NS_LOG_INFO ("Packet Size: " << packet->GetSize());
+  NS_LOG_INFO ("Serialized Size: " << packet->GetSerializedSize());
+  NS_LOG_INFO ("Packet: " << packet->ToString());
+  // NS_LOG_INFO (packet->PrintPacketTags(std::cout));
 
   // Retrieve the tunnel id from packet, if available.
   Ptr<Packet> localPacket = packet->Copy ();
@@ -354,7 +433,7 @@ bool
 OFSwitch13Port::Send (Ptr<const Packet> packet, uint32_t queueNo,
                       uint64_t tunnelId)
 {
-  NS_LOG_FUNCTION (this << packet << queueNo << tunnelId);
+  NS_LOG_FUNCTION (this << packet << queueNo << tunnelId << Simulator::Now ());
 
   if (m_swPort->conf->config & (OFPPC_PORT_DOWN))
     {
@@ -384,6 +463,14 @@ OFSwitch13Port::Send (Ptr<const Packet> packet, uint32_t queueNo,
   TunnelIdTag tunnelIdTag (tunnelId);
   packetCopy->ReplacePacketTag (tunnelIdTag);
   NS_LOG_DEBUG ("Pkt tunnel tag will be " << tunnelId);
+
+  NS_LOG_INFO ("Time: " << Simulator::Now ());
+  NS_LOG_INFO ("Packet Size: " << packetCopy->GetSize());
+  NS_LOG_INFO ("Serialized Size: " << packetCopy->GetSerializedSize());
+  NS_LOG_INFO ("Packet: " << packetCopy->ToString());
+  NS_LOG_INFO ("From: " << header.GetSource() );
+  NS_LOG_INFO ("To: " << header.GetDestination () );
+  NS_LOG_INFO ("LengthType: " << header.GetLengthType () );
 
   // Send the packet over the underlying net device.
   bool status = m_netDev->SendFrom (packetCopy, header.GetSource (),

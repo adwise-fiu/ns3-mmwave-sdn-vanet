@@ -33,6 +33,11 @@
 #include <ns3/object-map.h>
 #include <ns3/lte-ue-component-carrier-manager.h>
 
+#include <ns3/ethernet-header.h>
+#include <ns3/ethernet-trailer.h>
+
+#undef NS_LOG_APPEND_CONTEXT
+#define NS_LOG_APPEND_CONTEXT std::clog << "[mac=" << GetAddress() << "] "
 
 namespace ns3 {
 
@@ -48,81 +53,81 @@ NS_OBJECT_ENSURE_REGISTERED (McUeNetDevice);
 
 TypeId McUeNetDevice::GetTypeId (void)
 {
-	static TypeId
-	tid =
-	TypeId("ns3::McUeNetDevice")
-	.SetParent<NetDevice> ()
+  static TypeId
+  tid =
+  TypeId("ns3::McUeNetDevice")
+  .SetParent<NetDevice> ()
   .AddConstructor<McUeNetDevice> ()
-	.AddAttribute ("Mtu", "The MAC-level Maximum Transmission Unit",
-                   UintegerValue (30000),
-                   MakeUintegerAccessor (&McUeNetDevice::SetMtu,
-                                         &McUeNetDevice::GetMtu),
-                   MakeUintegerChecker<uint16_t> ())
-	// Common attributes
-	.AddAttribute ("EpcUeNas",
-                   "The NAS associated to the this NetDevice",
-                   PointerValue (),
-                   MakePointerAccessor (&McUeNetDevice::m_nas),
-                   MakePointerChecker <EpcUeNas> ())
+  .AddAttribute ("Mtu", "The MAC-level Maximum Transmission Unit",
+                  UintegerValue (30000),
+                  MakeUintegerAccessor (&McUeNetDevice::SetMtu,
+                                        &McUeNetDevice::GetMtu),
+                  MakeUintegerChecker<uint16_t> ())
+  // Common attributes
+  .AddAttribute ("EpcUeNas",
+                 "The NAS associated to the this NetDevice",
+                  PointerValue (),
+                  MakePointerAccessor (&McUeNetDevice::m_nas),
+                  MakePointerChecker <EpcUeNas> ())
   .AddAttribute ("Imsi",
-                   "International Mobile Subscriber Identity assigned to this UE",
-                   UintegerValue (0),
-                   MakeUintegerAccessor (&McUeNetDevice::m_imsi),
-                   MakeUintegerChecker<uint64_t> ())
-   .AddAttribute ("CsgId",
-                   "The Closed Subscriber Group (CSG) identity that this UE is associated with, "
-                   "i.e., giving the UE access to cells which belong to this particular CSG. "
-                   "This restriction only applies to initial cell selection and EPC-enabled simulation. "
-                   "This does not revoke the UE's access to non-CSG cells. ",
-                   UintegerValue (0),
-                   MakeUintegerAccessor (&McUeNetDevice::SetCsgId,
-                                         &McUeNetDevice::GetCsgId),
-                   MakeUintegerChecker<uint32_t> ())
-    // LTE stack
-    .AddAttribute ("LteUeRrc",
-                   "The RRC associated to the LTE stack of this NetDevice",
-                   PointerValue (),
-                   MakePointerAccessor (&McUeNetDevice::m_lteRrc),
-                   MakePointerChecker <LteUeRrc> ())
-	  .AddAttribute ("LteUeComponentCarrierManager",
-									 "The LteComponentCarrierManager associated to this McUeNetDevice",
-									 PointerValue (),
-									 MakePointerAccessor (&McUeNetDevice::m_lteComponentCarrierManager),
-									 MakePointerChecker <LteUeComponentCarrierManager> ())
-		.AddAttribute ("LteComponentCarrierMapUe", "List of all LTE CCs.",
- 									 ObjectMapValue (),
- 									 MakeObjectMapAccessor (&McUeNetDevice::m_lteCcMap),
- 									 MakeObjectMapChecker<ComponentCarrierUe> ())
-    .AddAttribute ("LteDlEarfcn",
-                   "Downlink E-UTRA Absolute Radio Frequency Channel Number (EARFCN) "
-                   "as per 3GPP 36.101 Section 5.7.3. ",
-                   UintegerValue (100),
-                   MakeUintegerAccessor (&McUeNetDevice::SetLteDlEarfcn,
-                                         &McUeNetDevice::GetLteDlEarfcn),
-                   MakeUintegerChecker<uint16_t> (0, 6149))
-    // mmWave stack attributes
-		.AddAttribute ("MmWaveUeRrc",
-	                   "The RRC associated to the mmWave stack of this NetDevice",
-	                   PointerValue (),
-	                   MakePointerAccessor (&McUeNetDevice::m_mmWaveRrc),
-	                   MakePointerChecker <LteUeRrc> ())
-		 .AddAttribute ("MmWaveUeComponentCarrierManager",
-	 									 "The MmWaveComponentCarrierManager associated to this McUeNetDevice",
-	 									 PointerValue (),
-	 									 MakePointerAccessor (&McUeNetDevice::m_mmWaveComponentCarrierManager),
-	 									 MakePointerChecker <LteUeComponentCarrierManager> ())
- 		.AddAttribute ("MmWaveComponentCarrierMapUe", "List of all mmWave CCs.",
-  									 ObjectMapValue (),
-  									 MakeObjectMapAccessor (&McUeNetDevice::m_mmWaveCcMap),
-  									 MakeObjectMapChecker<MmWaveComponentCarrierUe> ())
-		.AddAttribute ("AntennaNum",
-								   "Antenna number of the device",
-								   UintegerValue (16),
-								   MakeUintegerAccessor (&McUeNetDevice::SetAntennaNum,
-													 &McUeNetDevice::GetAntennaNum),
-							   			 		 MakeUintegerChecker<uint8_t> ())
-	;
-	return tid;
+                 "International Mobile Subscriber Identity assigned to this UE",
+                  UintegerValue (0),
+                  MakeUintegerAccessor (&McUeNetDevice::m_imsi),
+                  MakeUintegerChecker<uint64_t> ())
+  .AddAttribute ("CsgId",
+                 "The Closed Subscriber Group (CSG) identity that this UE is associated with, "
+                 "i.e., giving the UE access to cells which belong to this particular CSG. "
+                 "This restriction only applies to initial cell selection and EPC-enabled simulation. "
+                 "This does not revoke the UE's access to non-CSG cells. ",
+                  UintegerValue (0),
+                  MakeUintegerAccessor (&McUeNetDevice::SetCsgId,
+                                        &McUeNetDevice::GetCsgId),
+                  MakeUintegerChecker<uint32_t> ())
+  // LTE stack
+  .AddAttribute ("LteUeRrc",
+                 "The RRC associated to the LTE stack of this NetDevice",
+                  PointerValue (),
+                  MakePointerAccessor (&McUeNetDevice::m_lteRrc),
+                  MakePointerChecker <LteUeRrc> ())
+  .AddAttribute ("LteUeComponentCarrierManager",
+                 "The LteComponentCarrierManager associated to this McUeNetDevice",
+                  PointerValue (),
+                  MakePointerAccessor (&McUeNetDevice::m_lteComponentCarrierManager),
+                  MakePointerChecker <LteUeComponentCarrierManager> ())
+  .AddAttribute ("LteComponentCarrierMapUe", "List of all LTE CCs.",
+                  ObjectMapValue (),
+                  MakeObjectMapAccessor (&McUeNetDevice::m_lteCcMap),
+                  MakeObjectMapChecker<ComponentCarrierUe> ())
+  .AddAttribute ("LteDlEarfcn",
+                 "Downlink E-UTRA Absolute Radio Frequency Channel Number (EARFCN) "
+                 "as per 3GPP 36.101 Section 5.7.3. ",
+                  UintegerValue (100),
+                  MakeUintegerAccessor (&McUeNetDevice::SetLteDlEarfcn,
+                                        &McUeNetDevice::GetLteDlEarfcn),
+                  MakeUintegerChecker<uint16_t> (0, 6149))
+  // mmWave stack attributes
+  .AddAttribute ("MmWaveUeRrc",
+                 "The RRC associated to the mmWave stack of this NetDevice",
+                  PointerValue (),
+                  MakePointerAccessor (&McUeNetDevice::m_mmWaveRrc),
+                  MakePointerChecker <LteUeRrc> ())
+  .AddAttribute ("MmWaveUeComponentCarrierManager",
+                 "The MmWaveComponentCarrierManager associated to this McUeNetDevice",
+                  PointerValue (),
+                  MakePointerAccessor (&McUeNetDevice::m_mmWaveComponentCarrierManager),
+                  MakePointerChecker <LteUeComponentCarrierManager> ())
+  .AddAttribute ("MmWaveComponentCarrierMapUe", "List of all mmWave CCs.",
+                  ObjectMapValue (),
+                  MakeObjectMapAccessor (&McUeNetDevice::m_mmWaveCcMap),
+                  MakeObjectMapChecker<MmWaveComponentCarrierUe> ())
+  .AddAttribute ("AntennaNum",
+                 "Antenna number of the device",
+                  UintegerValue (16),
+                  MakeUintegerAccessor (&McUeNetDevice::SetAntennaNum,
+                                        &McUeNetDevice::GetAntennaNum),
+                  MakeUintegerChecker<uint8_t> ())
+  ;
+  return tid;
 }
 
 McUeNetDevice::McUeNetDevice ()
@@ -250,14 +255,20 @@ McUeNetDevice::SetReceiveCallback (ReceiveCallback cb)
   m_rxCallback = cb;
 }
 
+void
+McUeNetDevice::SetOpenFlowReceiveCallback (NetDevice::PromiscReceiveCallback cb)
+{
+  NS_LOG_FUNCTION (&cb);
+  m_openFlowRxCallback = cb;
+}
 
 bool
 McUeNetDevice::SendFrom (Ptr<Packet> packet, const Address& source, const Address& dest, uint16_t protocolNumber)
 {
-  NS_FATAL_ERROR ("SendFrom () not supported");
-  return false;
+	// Method implemented for compatibility between this MmWave Net Device and the OFSwtich13 application
+  NS_LOG_FUNCTION (this << source << dest << protocolNumber);
+  return DoSend (packet, dest, protocolNumber);
 }
-
 
 bool
 McUeNetDevice::SupportsSendFrom (void) const
@@ -265,7 +276,6 @@ McUeNetDevice::SupportsSendFrom (void) const
   NS_LOG_FUNCTION (this);
   return false;
 }
-
 
 bool
 McUeNetDevice::SetMtu (const uint16_t mtu)
@@ -282,7 +292,6 @@ McUeNetDevice::GetMtu (void) const
   return m_mtu;
 }
 
-
 void
 McUeNetDevice::SetIfIndex (const uint32_t index)
 {
@@ -297,14 +306,12 @@ McUeNetDevice::GetIfIndex (void) const
   return m_ifIndex;
 }
 
-
 bool
 McUeNetDevice::IsLinkUp (void) const
 {
   NS_LOG_FUNCTION (this);
   return m_linkUp;
 }
-
 
 bool
 McUeNetDevice::IsBroadcast (void) const
@@ -327,7 +334,6 @@ McUeNetDevice::IsMulticast (void) const
   return false;
 }
 
-
 bool
 McUeNetDevice::IsPointToPoint (void) const
 {
@@ -335,14 +341,12 @@ McUeNetDevice::IsPointToPoint (void) const
   return false;
 }
 
-
 bool
 McUeNetDevice::NeedsArp (void) const
 {
   NS_LOG_FUNCTION (this);
   return false;
 }
-
 
 bool
 McUeNetDevice::IsBridge (void) const
@@ -385,7 +389,6 @@ McUeNetDevice::AddLinkChangeCallback (Callback<void> callback)
   m_linkChangeCallbacks.ConnectWithoutContext (callback);
 }
 
-
 void
 McUeNetDevice::SetPromiscReceiveCallback (PromiscReceiveCallback cb)
 {
@@ -393,14 +396,57 @@ McUeNetDevice::SetPromiscReceiveCallback (PromiscReceiveCallback cb)
   NS_LOG_WARN ("Promisc mode not supported");
 }
 
-
 void
 McUeNetDevice::Receive (Ptr<Packet> p)
 {
   NS_LOG_FUNCTION (this << p);
+	//
+  // Check if this device is configure as an OpenFlow switch port.
+  //
+  NS_LOG_INFO ("McUeNetDevice: Received packet Uid " << p->GetUid() << " with size: " << p->GetSize() << ", serialized size: " << p->GetSerializedSize() );
+  NS_LOG_INFO ("Packet: " << p->ToString());
+  if (!m_openFlowRxCallback.IsNull ())
+    {
+      // We forward the original packet to the
+      // OpenFlow receive callback for the packetType we receive
+      // and we set the type to otherhost
+
+      // We need to deliver an Ethernet frame,
+      // to be processed adequately by the OpenFlow controller
+      Mac48Address from = m_macaddress;
+
+      if (p->GetSize () < 46)
+        {
+          uint8_t buffer[46];
+          memset (buffer, 0, 46);
+          Ptr<Packet> padd = Create<Packet> (buffer, 46 - p->GetSize ());
+          p->AddAtEnd (padd);
+        }
+
+      EthernetHeader ethHeader (false);
+      ethHeader.SetSource (from);
+      ethHeader.SetLengthType (Ipv4L3Protocol::PROT_NUMBER);
+      p->AddHeader (ethHeader);
+
+      EthernetTrailer trailer;
+      if (Node::ChecksumEnabled ())
+        {
+          trailer.EnableFcs (true);
+        }
+      trailer.CalcFcs (p);
+      p->AddTrailer (trailer);
+
+      NS_LOG_INFO ("McUeNetDevice: Packet encapsulated into a DIX Ethernet frame");
+      NS_LOG_INFO ("Packet size: " << p->GetSize() << ", serialized size: " << p->GetSerializedSize());
+      NS_LOG_INFO ("Packet: " << p->ToString());
+      // The address specified does not  matter, it is not used for other than logging
+      // The packet is going to be handled according to predefined rules in the openflow switch
+      m_openFlowRxCallback (this, p, Ipv4L3Protocol::PROT_NUMBER, from, Mac48Address ("00:00:00:00:10:00"),
+                            NetDevice::PACKET_OTHERHOST);
+      return;
+    }
   m_rxCallback (this, p, Ipv4L3Protocol::PROT_NUMBER, Address ());
 }
-
 
 bool
 McUeNetDevice::Send (Ptr<Packet> packet, const Address& dest, uint16_t protocolNumber)
@@ -449,7 +495,6 @@ McUeNetDevice::UpdateConfig (void)
 	}
 }
 
-
 Ptr<LteUeMac>
 McUeNetDevice::GetLteMac (void) const
 {
@@ -464,14 +509,12 @@ McUeNetDevice::GetLteMac (uint8_t index) const
   return m_lteCcMap.at (index)->GetMac ();
 }
 
-
 Ptr<LteUeRrc>
 McUeNetDevice::GetLteRrc (void) const
 {
   NS_LOG_FUNCTION (this);
   return m_lteRrc;
 }
-
 
 Ptr<LteUePhy>
 McUeNetDevice::GetLtePhy (void) const
@@ -544,7 +587,6 @@ McUeNetDevice::SetLteTargetEnb (Ptr<LteEnbNetDevice> enb)
   m_lteTargetEnb = enb;
 }
 
-
 Ptr<LteEnbNetDevice>
 McUeNetDevice::GetLteTargetEnb (void)
 {
@@ -596,7 +638,6 @@ McUeNetDevice::GetMmWaveComponentCarrierManager (void) const
   return m_mmWaveComponentCarrierManager;
 }
 
-
 Ptr<LteUeRrc>
 McUeNetDevice::GetMmWaveRrc (void) const
 {
@@ -640,7 +681,6 @@ McUeNetDevice::SetMmWaveCcMap (std::map< uint8_t, Ptr<MmWaveComponentCarrierUe> 
   m_mmWaveCcMap = ccm;
 }
 
-
 uint8_t
 McUeNetDevice::GetAntennaNum () const
 {
@@ -662,6 +702,12 @@ McUeNetDevice::DoSend (Ptr<Packet> packet, const Address& dest, uint16_t protoco
 	  NS_LOG_INFO("unsupported protocol " << protocolNumber << ", only IPv4 is supported");
 	  return true;
 	}
+	Ipv4Header hdr;
+  packet->PeekHeader (hdr);
+
+	NS_LOG_INFO ("McUeNetDevice: Sending packet Uid " << packet-> GetUid () << " with size: " << packet->GetSize() << ", serialized size: " << packet->GetSerializedSize() <<
+							", to: " << dest << ", ip src: " <<  hdr.GetSource() << ", ip dst: " <<  hdr.GetDestination ());
+  NS_LOG_INFO ("Packet: " << packet->ToString());
   return m_nas->Send(packet);
 }
 
