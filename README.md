@@ -1,5 +1,5 @@
-# Integration of SDN with Wireless Interfaces Including Cellular mmWave for Simulations in ns-3 v3.29
 ---
+# Integration of SDN with Wireless Interfaces Including Cellular mmWave for Simulations in ns-3 v3.29
 
 This code integrates modules from two repositories along with other improvements to expand the functionality of wireless interfaces.
 This work aims to serve as a framework for simulation of scenarios integrating SDN on vehicular adhoc networks (VANET).
@@ -52,14 +52,16 @@ Please, visit the [OFSwitch13 project homepage][project] for detailed informatio
 The  *Ns2MobilityHelper* was expanded to allow 3D mobility traces. For more information click [here][ns2mobility].
 
 &nbsp;
-## License ##
 ---
+## License ##
+
 The cellular mmWave software is licensed under the terms of the [GNU GPLv2 license][gpl], as well as ns-3. See the LICENSE file for more details.
 The OFSwitch13 module is free software, released under the BSD license (BSD-like for code from the original Stanford switch), and is publicly available for research, development, and use.
 
 &nbsp;
-## The Network Simulator, Version 3 ##
 ---
+## The Network Simulator, Version 3 ##
+
 *This information can be found in the official [ns-3 repository][ns3repo]*.
 
 ### Table of Contents:
